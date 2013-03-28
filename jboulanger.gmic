@@ -190,15 +190,15 @@ croparound :  -skip ${1=10},${2=10}
 #
 #---------------------------------
 
-#@gmic movavg : _size>1
+#@gmic movavg : _size>=1
 #@gmic : moving average of image list with a box filter of size _size
 #@gmic : $ 11 -f 'x>w/2' --l[-1] -s x -movavg 9 -a x -endl  --blur[0] 1.2 -a c -plot
 movavg : -check "$1>=1"
 -e[^-1] "moving average with size "$1 -v -
 n={$1-1}
 -repeat $n
--repeat {{@#}-1} --+[{$>},{$>+1}] -*[-1] .5 -rm[$>] -mv[-1] $> -done
--reverse
+  -repeat {{@#}-1} --+[{$>},{$>+1}] -*[-1] .5 -rm[$>] -mv[-1] $> -done
+  -reverse
 -done
 -if {$n%2!=0} -reverse -endif
 -v +
@@ -244,7 +244,7 @@ s=@{0,a} -repeat $1 -blur $2 --blur {2*$2} -- -cut 0,100% -f 'i*{$s}/ia' -done
 #@gmic tubeness : _nb_iteration,_scale,_strength
 #@gmic : Tubeness filter based on the eigen value of the Hessian
 #@gmic Default values: '_nb_iter=1, _scale=1, _strength=1'
-#@gmic : $ image.png -tubness 3
+#@gmic : $ image.jpg -tubeness 3
 tubeness : -check "${1=1}>=0 && ${2=2}>=0 && ${3=1}>=0"
 -e[^-1] "Tubeness with scale $1 iteration $2 and strength $3"
 -v - -repeat @# -l[$>]
@@ -263,7 +263,7 @@ tubeness : -check "${1=1}>=0 && ${2=2}>=0 && ${3=1}>=0"
 #@gmic schizo : _amplitude,_amplitude_normal,_nb_iterations,_strength
 #@gmic : Schizo filter gives either a furry image or a smoothed image
 #@gmic Default values: '_amplitude=100,amplitude_normal=-50 _nb_iter=5,_strength=.75'
-#@gmic : $ image.jpg --nicefilter[-1] 100,-50 --nicefilter[0] -50,100 -max 0 -a x
+#@gmic : $ image.jpg --schizo 100,-50 --schizo[0] -50,100 -max 0 -frame 5,5 -a x
 schizo : -skip ${1=100},${2=-50},${3=5},${4=.75}
 -e[^-1] "Schizo filter smoothing with // $1 and T $2 and $3 iterations."
 -v - -repeat @# -l[$>]
@@ -347,7 +347,7 @@ pca :
 reshape: -skip ${2=1},${3=1}
 -e[^-1] "Reshape to "$1"x"$2"x"$3"."
 -v - -repeat @# -l[$>]
--unroll x -split x,{@{0,w}/($1*$2*$3)} -a c -split x,$3 -a z -split x,$1 -a x -split x,$2 -a y
+  -unroll x -split x,{@{0,w}/($1*$2*$3)} -a c -split x,$3 -a z -split x,$1 -a x -split x,$2 -a y
 -endl -done -v +
 
 #@gmic split_patches: _patch_width,_patch_height
@@ -356,23 +356,23 @@ reshape: -skip ${2=1},${3=1}
 split_patches:
 -e[^-1] "split image into "$1"x"$2" patches."
 -v - -repeat @# -l[$>]
--split_tiles {@{0,w}/$1},{@{0,h}/$2} -unroll y -a x
+  -split_tiles {@{0,w}/$1},{@{0,h}/$2} -unroll y -a x
 -endl -done -v +
 
 #@gmic append_patches : _patch_width,_patch_height,_patch_spectrum,_image_width,_image_height
 #@gmic append 2D patches into a new image of size (_image_width x _image_height)
-#@gmic  $ -tiger -resize 512,512 -split_patches 16,16 -append_patches 16,16,512,512
+#@gmic  $ image.jpg -resize 512,512 -split_patches 16,16 -append_patches 16,16,512,512
 append_patches:
 -e[^-1] "Append 2D "$1"x"$2" patches into a "$3"x"$4" image."
 -v - -repeat @# -l[$>]
--s x -reshape $1,$2 -append_tiles {round($3/$1)},{round($4/$2)}
+  -s x -reshape $1,$2 -append_tiles {round($3/$1)},{round($4/$2)}
 -endl -done -v +
 
 #@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_size_of_the_dictionnary
 #@gmic Denoising using a dictionnary of patches
 #@gmic Works only for image whos size is a multiple of the patch_size
 #@gmic Obviously to be improved!
-#@gmic $ image.jpg --noise 10 --denoise_patch_dict[1]
+#@gmic $ image.jpg -resize 256,256 --noise 10 --denoise_patch_dict[1]
 denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
 -e[^-1] "Denoising using a dictionnary of patches "$1"x"$1" and "$2" shifts."
 -v - -repeat @# -l[$>]
