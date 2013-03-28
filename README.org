@@ -4,3 +4,6 @@
 
 ** Description
    List of [[http://gmic.sourceforge.net][gmic]] commands for image processing.
+
+   Generate documentation using :
+   gmic raw:jboulanger.gmic,uchar -document_gmic html 2> doc.html
