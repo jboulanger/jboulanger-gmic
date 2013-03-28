@@ -1,0 +1,6 @@
+
+* jboulanger.gmic
+  Jérôme Boulanger (jerome.boulanger@curie.fr)
+
+** Description
+   List of [[http://gmic.sourceforge.net][gmic]] commands for image processing.

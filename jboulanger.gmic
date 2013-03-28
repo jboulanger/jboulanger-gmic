@@ -1,0 +1,392 @@
+#@gmic
+#
+#  File        : jboulanger.gmic
+#                ( G'MIC commands file )
+#
+#  Description : Define a set of gmic commands (mostly useful for bioimage analysis)
+#
+#  Copyright   : Jerome Boulanger
+#
+#  License     : CeCILL v2.0
+#                ( http://www.cecill.info/licences/Licence_CeCILL_V2-en.html )
+#
+#  This software is governed by the CeCILL  license under French law and
+#  abiding by the rules of distribution of free software.  You can  use,
+#  modify and/ or redistribute the software under the terms of the CeCILL
+#  license as circulated by CEA, CNRS and INRIA at the following URL
+#  "http://www.cecill.info".
+#
+#  As a counterpart to the access to the source code and  rights to copy,
+#  modify and redistribute granted by the license, users are provided only
+#  with a limited warranty  and the software's author,  the holder of the
+#  economic rights,  and the successive licensors  have only  limited
+#  liability.
+#
+#  In this respect, the user's attention is drawn to the risks associated
+#  with loading,  using,  modifying and/or developing or reproducing the
+#  software by the user in light of its specific status of free software,
+#  that may mean  that it is complicated to manipulate,  and  that  also
+#  therefore means  that it is reserved for developers  and  experienced
+#  professionals having in-depth computer knowledge. Users are therefore
+#  encouraged to load and test the software's suitability as regards their
+#  requirements in conditions enabling the security of their systems and/or
+#  data to be ensured and,  more generally, to use and operate it in the
+#  same conditions as regards security.
+#
+#  The fact that you are presently reading this means that you have had
+#  knowledge of the CeCILL license and that you accept its terms.
+#
+
+
+#---------------------------------
+#
+#@gmic :: Input/Output
+#
+#---------------------------------
+
+#@gmic tiff3d:
+#@gmic Input a 3D tif as a 3D image
+#@gmic Note: This is useful for loading several 3D image stack
+tiff3d : -e[^-1] "Load the file $1 as a 3D image"
+-v - n=@#
+-i $1 -a[{$n}--1] z
+-v +
+
+#@gmic toff3d:
+#@gmic Output a 3D tif as a 3D image
+toff3d : -e[^-1] "Save the 3D image as a tiff file"
+-v -
+-repeat @#
+-o[$>] @{"-filename \"$1\","$>}
+-done
+-v +
+
+#---------------------------------
+#
+#@gmic :: 3D
+#
+#---------------------------------
+
+#@gmic boundingbox3d:
+#@gmic Bounding box of a 3D volume
+#@gmic $ 100,100,100 -boundingbox3d
+boundingbox3d : -skip ${1=10}
+-e[^-1] "Bounding box"
+-repeat @# -l[$>]
+-box3d @{0,w},@{0,h},@{0,d} -primitives3d[-1] 1  -opacity3d[-1] .25
+-plane3d @{0,w},@{0,h},$1,{round(@{0,h}/@{0,w}*$1)} -primitives3d[-1] 1 -opacity3d[-1] .1
+-rm[0]
+-+3d
+-endl -done
+
+#@gmic rendervolume :
+#@gmic : render the volume
+#@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -rendervolume
+rendervolume: -skip ${1=8},${2=5},${3=.1}
+-e[^-1] "render_volume with size $1 quality $2 and opactiy $3"
+-v - -repeat @# -l[$>]
+-mirror x -n 1,256 --tones $2 -r[1--1] 100%,100%,100%,3,1 -*[1--1] [0] -rm[0,1]
+-repeat @# -if {@{$<,iM}>0} -pointcloud3d[$<]  -gaussians3d[$<] $1,{$3*($<+1)/$2} -else -rm[$<] -endif -done
+-+3d -md3d -1 -+3d 0,0,{0.5*$1}
+-endl -done -v +
+
+#@gmic displayvolume :
+#@gmic display the volume with  black background, a bounding box and a volumic rendering of the data
+#@gmic $  100,100,100 -noise 10 -blur 5 --gt 50% -*  -normalize 0,255 -displayvolume 8,5,1
+displayvolume: -skip ${1=8},${2=5},${3=.1}
+-e[^-1] "display_volume with size $1 quality $2 and opactiy $3"
+-v -
+--boundingbox3d 20
+-rendervolume[0] $1,$2,$3
+-+3d
+-background3d 0,0,0
+-v +
+
+#@gmic colordepth :
+#@gmic : 2D colordepth coding of a 3D volume
+colordepth_old:
+-v - -repeat @# -l[$>]
+-resize 100%,100%,3,1,5 -s z -reverse -a z -permute xycz
+-endl -done -v +
+
+#@gmic colordepth :
+#@gmic : Colordepth coding
+#@gmic : $ 100,100,10 -noise 10 -blur 1 -colordepth
+colordepth: -skip ${1=5}
+-e "colordepth coding with lut $1"
+-v - -repeat @# -l[$>]
+-_colordepth_volume $1 -s z -+
+-endl -done -v +
+
+_colordepth_volume: -skip ${1=5}
+-v - -repeat @# -l[$>]
+-i [0] -f[-1] 'z/(d-1)*255' -map[-1] $1 -resize[0] 100%,100%,100%,3,5 -*
+-endl -done -v +
+
+colordepth_scale: -skip ${1=5}
+10,@{0,h-10} -f[-1] '(h-y)/(h-1)*255' -map[-1] $1 -frame[-1] 5,5,0,0,0
+
+#---------------------------------
+#
+#@gmic :: Feature detections
+#
+#---------------------------------
+
+#@gmic detect_events : _scale_xy,_scale_t,_threshold
+#@gmic : Detect space time events using space time Harris features
+#@gmic : $ 100,100,100 -noise 1 -blur 2 -detectevents
+detectevents : -skip ${1=1},${2=1},${3=9}
+-e[^-1] "detect events with scale_xy $1 scale_z $2 and threshold $3"
+-v -
+-repeat @# -l[$>]
+-blur_xy $1 -blur_z $2 -structuretensors -blur_xy $1 -blur_z $2
+-s z -repeat @# -l[$>] -eigen -k[0] -s c -k[2] -endl -done -a z
+thres={@{0,ia}+$3*sqrt(@{0,iv})}
+--max_patch[0] 8 -threshold[0] $thres -*
+-endl -done -v +
+
+#@gmic pointscoordinates :
+#@gmic : Return the list of points in the image as 3*N columns vector
+#@gmic : $ 100,100 -noise .1,2 -pointscoordinates
+pointscoordinates :
+-e[^-1] "return the list of points in the image"
+-v - -repeat @# -l[$>]
+-pointcloud3d -s3d -k[2] -split y,{h/3} -a x
+-endl -done -v +
+
+#@gmic circles : _size
+#@gmic : plot circles on image [0] at coordinates given by image [1]
+#@gmic : $ 100,100,10 -noise .1,2 --pointscoordinates -circles 5
+circles : -v - -skip ${1=10},${2=128}
+-e[^-1] "draw @{1,w} circles on image [0]"
+-repeat {@{1,w}}
+  x={@{1,i($>,0)}} y={@{1,i($>,1)}} z={@{1,i($>,2)}}
+  -repeat @{0,s} -sh[0] $z,$z,$> -ellipse[-1] $x,$y,$1,$1,0,.5,0xFFFFFF,$2 -rm[-1] -done
+-done
+
+#@gmic addtext : _size
+#@gmic : Add labels on image [0] at coordinates given by image [1]
+#@gmic : $ 100,100,10 -noise .1,2 --pointscoordinates -circles 5
+addtext : -v - -skip ${1=21},${2=128}
+-e[^-1] "add text labels from @{1,w} points"
+-repeat {@{1,w}}
+  x={@{1,i($>,0)}} y={@{1,i($>,1)}} z={@{1,i($>,2)}} id={$>+1}
+  -repeat @{0,s} -sh[0] $z,$z,$> -text[-1] $id,$x,$y,21,.5,$2,$2,$2 -rm[-1] -done
+-done
+
+#@gmic croparound : _size
+#@gmic : Crop image [0] around coordinates given by image [1]
+#@gmic : $ 100,100,10 -noise .1,2 --pointscoordinates -circles 5
+croparound :  -skip ${1=10},${2=10}
+-e[^-1] "crop image [0] around "@{1,w}" coordinates given by image [1]" -v -
+-repeat {@{1,w}}
+  x={@{1,i($>,0)}} y={@{1,i($>,1)}} z={@{1,i($>,2)}}
+  --crop[0] {$x-$1},{$y-$1},{$z-$2},{$x+$1},{$y+$1},{$z+$2}
+-done -rm[0,1] -v +
+
+#---------------------------------
+#
+#@gmic :: Filtering and deconvolution
+#
+#---------------------------------
+
+#@gmic movavg : _size>1
+#@gmic : moving average of image list with a box filter of size _size
+#@gmic : $ 11 -f 'x>w/2' --l[-1] -s x -movavg 9 -a x -endl  --blur[0] 1.2 -a c -plot
+movavg : -check "$1>=1"
+-e[^-1] "moving average with size "$1 -v -
+n={$1-1}
+-repeat $n
+-repeat {{@#}-1} --+[{$>},{$>+1}] -*[-1] .5 -rm[$>] -mv[-1] $> -done
+-reverse
+-done
+-if {$n%2!=0} -reverse -endif
+-v +
+
+#@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0
+#@gmic : Deblur an image using Richardson-Lucy algorithm.
+#@gmic Default values: '_nb_iter=10'
+#@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy 1
+deblur_richardsonlucy : -check "$1>=0 && ${2=10}>=0"
+-e[^-1] "Deblur an image using Richardson-Lucy algorithm with sigma $1 and $2 iterations."
+-v - -repeat @# -l[$>]
+  [0]
+  -repeat $2
+    --blur[-1] $1 --/[0,-1] -rm[-2] -blur[-1] $1 -*[-1,-2] # u *= H ( f / Hu )
+  -done
+  -rm[0]
+-endl -done -v +
+
+#@gmic deblur_goldmeinel : _sigma>0, _nb_iter>0, _acceleration
+#@gmic : Deblur an image using Gold Meinel algorithm
+#@gmic Default values: '_nb_iter=8, _acceleration=1'
+#@gmic : $ image.jpg --blur 1 --deblur_goldmeinel 1
+deblur_goldmeinel : -check "$1>=0 && ${2=8}>=0 && ${3=1}"
+-e[^-1] "Deblur an image using Gold-Meinel algorithm with sigma $1 and $2 iterations and acceleration $3."
+-v - -repeat @# -l[$>]
+  [0]
+  -repeat $2
+    --blur[-1] $1 --/[0,-1] -rm[-2] -pow[-1] $3 -*[-1,-2] # u *= f / Hu
+  -done
+  -rm[0]
+-endl -done -v +
+
+#@gmic spotify : _nb_iter>0,_scale>0
+#@gmic : Make everything look like a spot
+#@gmic Default values: '_nb_iter=1, _scale=1'
+#@gmic : $ image.jpg -spotify 10
+spotify : -check "${1=1}>=0 && ${2=1}>=0"
+-e[^-1] "Spotify with $1 iteration and scale $2 "
+-v - -repeat @# -l[$>]
+s=@{0,a} -repeat $1 -blur $2 --blur {2*$2} -- -cut 0,100% -f 'i*{$s}/ia' -done
+-endl -done -v +
+
+#@gmic tubeness : _nb_iteration,_scale,_strength
+#@gmic : Tubeness filter based on the eigen value of the Hessian
+#@gmic Default values: '_nb_iter=1, _scale=1, _strength=1'
+#@gmic : $ image.png -tubness 3
+tubeness : -check "${1=1}>=0 && ${2=2}>=0 && ${3=1}>=0"
+-e[^-1] "Tubeness with scale $1 iteration $2 and strength $3"
+-v - -repeat @# -l[$>]
+  -repeat $2
+   [0]
+   -l[-1]
+     -blur $1
+     -s c -repeat @# -l[$>]
+       -hessian -a c -eigen -k[0] -s c -k[1] -* -1 -cut 0,100%
+     -endl -done -a c
+   -endl
+   -*[-1] $3 -+
+   -done
+-endl -done -v +
+
+#@gmic schizo : _amplitude,_amplitude_normal,_nb_iterations,_strength
+#@gmic : Schizo filter gives either a furry image or a smoothed image
+#@gmic Default values: '_amplitude=100,amplitude_normal=-50 _nb_iter=5,_strength=.75'
+#@gmic : $ image.jpg --nicefilter[-1] 100,-50 --nicefilter[0] -50,100 -max 0 -a x
+schizo : -skip ${1=100},${2=-50},${3=5},${4=.75}
+-e[^-1] "Schizo filter smoothing with // $1 and T $2 and $3 iterations."
+-v - -repeat @# -l[$>]
+[0]
+-repeat $3
+ -l[-1]
+   --iee -*[-1] {$1/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}
+   --inn[0] -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}
+   -+
+ -endl
+ -*[-1] $4  --*[0] {1-$4} -+[-1,-2]
+-done -rm[0]
+-endl -done -v +
+
+#@gmic warp_affine :
+#@gmic Warp the image [0] using an affine field defined by a 3x3 matrix [1]
+#@gmic $ image 3,3 -f[-1] '(1,0,0,1,1,0,1,0,1)' --warp_affine[0,1] -k[0,-1] -a c
+warp_affine :
+--l[0,1]
+ params=(@{1,i(0,0)},@{1,i(1,0)},@{1,i(2,0)};\
+         @{1,i(0,1)},@{1,i(1,1)},@{1,i(2,1)};\
+         @{1,i(0,2)},@{1,i(1,2)},@{1,i(2,2)})
+ @{0,w},@{0,h},1,1,1 --f[-1] x --f[-1] y -a[-3--1] c
+ -mix_channels[-1] $params
+ -channels[-1] 1,2
+ -warp[0] [-1],0,1,0 -rm[-1,-2]
+-endl
+-rm[0,1]
+
+#@gmic midway
+#@gmic Midway equalization of two channels
+#@gmic image.jpg -channels 0,1 -s c -*[-1] 2 -a c -midway
+midway:
+-repeat @# -l[$>]
+--l[0]
+  -resize 20%,20%
+  -s c -unroll y -l[0] 1,@{0,h},1,1,1 -a x -endl  -transpose[0]
+  -l[0] -svd -f[-2] 'if(i>1e-6,1/i,0)' -diagonal[-2] -transpose[-1] -mmul -endl -mmul
+  a=@{0,0} b=@{0,1} -rm[-1]
+-endl
+-s c
+-+[-1] {$b} -*[-1] {1/$a} -a c
+-endl -done
+
+#@gmic contour2d: _tolerance
+#@gmic Draw a 2D contour of regions with tolerance _tolerance
+#@gmic $ 100,100,1,3 -noise 1 -blur 3 -gt 0 -contour2d
+contour2d: -skip ${1=.1}
+-v - -repeat @# -l[$>]
+-f 'if(abs(i(x,y)-i(x+1,y+1))>$1||abs(i(x,y)-i(x+1,y))>$1,1,0)'
+-endl -done -v +
+
+#@gmic vobs : _scale
+#@gmic Motion quantity (Normal motion)
+#@gmic $ 100,100,10 -noise 1 -blur 1 -thres
+vobs :
+-repeat @# -l[$>]
+-gradient -a[0,1] c -norm[0] -abs[1] --* -rm[1] -blur $1 -reverse -/
+-endl -done
+
+#@gmic cov :
+#@gmic return the covariance matrix of the columns vectors
+#@gmic $ 10,5 -noise 5 --cov
+cov:
+-e[^-1] "Compute the covariance matrix along y dimension"
+-v - -repeat @# -l[$>] -- 'ia' --transpose[-1] -**[-2,-1] -endl -done -v +
+
+#@gmic pca:
+#@gmic compute the principal component analysis of the matrix and return the vectors
+#@gmic $ -barbara -split_patches 8 -pca --display_patch_dict 8,8,1
+pca :
+-e[^-1] "PCA"
+-v - -repeat @# -l[$>] -cov -eigen -k[-1] -endl -done -v +
+
+#@gmic split_patches: _patch_width,_patch_height
+#@gmic split the image into N patches of size M and convert them to a NxM image
+#@gmic $ -tiger -resize 512,512 -split_patches 16,16 -display_patch_dict 16,16,1,3
+split_patches:
+-e[^-1] "split image into "$1"x"$2" patches."
+-v - -repeat @# -l[$>]
+-split_tiles {@{0,w}/$1},{@{0,h}/$2} -unroll y -a x
+-endl -done -v +
+
+#@gmic append_patches : _patch_width,_patch_height,_patch_spectrum,_image_width,_image_height
+#@gmic append 2D patches into a new image of size (_image_width x _image_height)
+#@gmic  $ -tiger -resize 512,512 -split_patches 16,16 -append_patches 16,16,512,512
+append_patches:
+-e[^-1] "Append 2D "$1"x"$2" patches into a "$3"x"$4" image."
+-v - -repeat @# -l[$>]
+-s x -resize $1,$2,1,$4,-1 -append_tiles {round($3/$1)},{round($4/$2)}
+-endl -done -v +
+
+#@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_size_of_the_dictionnary
+#@gmic Denoising using a dictionnary of patches
+#@gmic Works only for image whos size is a multiple of the patch_size
+#@gmic Obviously to be improved!
+#@gmic $ image.jpg --noise 10 --denoise_patch_dict[1]
+denoise_patch_dict: -skip ${1=8},${2=8},${3=3},${4=100%}
+-e[^-1] "Denoising using a dictionnary of patches "$1"x"$1" and "$2" shifts."
+-v -
+--split_patches[-1] $1,$1
+-l[-1] -s x -/ 'sqrt(iv)' -a x -endl                            # normalize the patches
+-l[-1] -cov -eigen -k[-1] -columns 0,$4 -endl                   # compute a dictionnary
+-repeat $2
+  -if {$2>1} dx={round(?(0,$1))} dy={round(?(0,$1))} -else dx=0 dy=0 -endif
+  --shift[0] $dx,$dy,0,0,2
+  -l[1,-1]
+    -split_patches[1] $1,$1
+    -transpose[0] --**
+    -l[-1] --abs -sort[-1] -unroll[-1] x  t={$3*@{-1,{@{-1,w}/2}}} -rm[-1] -endl # MAD
+    -f[-1] 'if(abs(i)<$t,0,i)'                                  # threshold the coefficients
+    -rm[1] -transpose[0] --** -rm[-2]                           # project on the dictionnary
+  -endl
+ -append_patches[-1] $1,$1,@{0,w},@{0,h},@{0,s}                 # reconstitute the image from patches
+ -shift[-1] {-$dx},{-$dy},0,0,2
+-done
+-rm[0,1]
+-+ -/ $2
+-v +
+
+
+# Local Variables:
+# mode: sh
+# End:
+#
+# (End of G'MIC custom commands)
