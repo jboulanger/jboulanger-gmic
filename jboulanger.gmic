@@ -233,7 +233,7 @@ deblur_richardsonlucy : -check "$1>=0 && ${2=10}>=0"
 #@gmic : Deblur an image using Gold Meinel algorithm
 #@gmic : Default values '_nb_iter=8, _acceleration=1'
 #@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
-deblur_goldmeinel : -check "$1>=0 && ${2=8}>=0 && ${3=1}"
+deblur_goldmeinel : -check "$1>=0 && ${2=8}>0 && ${3=1}"
 -e[^-1] "Deblur an image using Gold-Meinel algorithm with sigma $1 and $2 iterations and acceleration $3."
 -v - -repeat @# -l[$>]
   [0]
@@ -387,11 +387,11 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
 #@gimp : Iterations = int(10,0,20)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 jeje_deblur_richardsonlucy:
-  -deblur_richardsonlucy ${1--2}
+  -deblur_richardsonlucy $*
   -n 0,255
 
 jeje_deblur_richardsonlucy_preview:
-  -gimp_split_preview "-jeje_deblur_richardsonlucy ${1--2}",$-1
+  -gimp_split_preview "-jeje_deblur_richardsonlucy $*",$-1
 
 #@gimp Gold-Meinel : jeje_deblur_goldmeinel, jeje_deblur_goldmeinel_preview
 #@gimp : Sigma = float(1,0,10)
@@ -399,11 +399,11 @@ jeje_deblur_richardsonlucy_preview:
 #@gimp : Acceleration = float(1,1,3)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 jeje_deblur_goldmeinel:
-  -deblur_goldmeinel ${1--2}
+  -deblur_goldmeinel $*
   -n 0,255
 
 jeje_deblur_goldmeinel_preview:
-  -gimp_split_preview "-jeje_deblur_goldmeinel ${1--2}",$-1
+  -gimp_split_preview "-jeje_deblur_goldmeinel $*",$-1
 
 # Local Variables:
 # mode: sh
