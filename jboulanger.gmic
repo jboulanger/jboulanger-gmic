@@ -319,10 +319,11 @@ contour2d: -skip ${1=.1}
 #@gmic vobs : _scale
 #@gmic Motion quantity (Normal motion)
 #@gmic $ 100,100,10 -noise 1 -blur 1 -thres
-vobs :
--repeat @# -l[$>]
+vobs : -check "${1=1}>0"
+-e[^-1] "Motion quantity with scale $1"
+-v - -repeat @# -l[$>]
 -gradient -a[0,1] c -norm[0] -abs[1] --* -rm[1] -blur $1 -reverse -/
--endl -done
+-endl -done -v +
 
 #@gmic cov :
 #@gmic return the covariance matrix of the columns vectors
@@ -337,6 +338,17 @@ cov:
 pca :
 -e[^-1] "PCA"
 -v - -repeat @# -l[$>] -cov -eigen -k[-1] -endl -done -v +
+
+#@gmic reshape : _w,_h,_d
+#@gmic reshape an image into another image of size _w,_h,_d,_spectrum where _spectrum is guessed
+#@gimc the image is first unrolled along x dimension
+#@gmic $ 10,4 -f 'x+10*y' --unroll y -reshape[-1] 10,4
+#@gmic $ -lena -split_patches 64,64 -s x -reshape 64,64 -normalize 0,255 -frame 1,1,0 -append_tiles
+reshape: -skip ${2=1},${3=1}
+-e[^-1] "Reshape to "$1"x"$2"x"$3"."
+-v - -repeat @# -l[$>]
+-unroll x -split x,{@{0,w}/($1*$2*$3)} -a c -split x,$3 -a z -split x,$1 -a x -split x,$2 -a y
+-endl -done -v +
 
 #@gmic split_patches: _patch_width,_patch_height
 #@gmic split the image into N patches of size M and convert them to a NxM image
@@ -353,7 +365,7 @@ split_patches:
 append_patches:
 -e[^-1] "Append 2D "$1"x"$2" patches into a "$3"x"$4" image."
 -v - -repeat @# -l[$>]
--s x -resize $1,$2,1,$4,-1 -append_tiles {round($3/$1)},{round($4/$2)}
+-s x -reshape $1,$2 -append_tiles {round($3/$1)},{round($4/$2)}
 -endl -done -v +
 
 #@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_size_of_the_dictionnary
@@ -361,28 +373,28 @@ append_patches:
 #@gmic Works only for image whos size is a multiple of the patch_size
 #@gmic Obviously to be improved!
 #@gmic $ image.jpg --noise 10 --denoise_patch_dict[1]
-denoise_patch_dict: -skip ${1=8},${2=8},${3=3},${4=100%}
+denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
 -e[^-1] "Denoising using a dictionnary of patches "$1"x"$1" and "$2" shifts."
--v -
---split_patches[-1] $1,$1
--l[-1] -s x -/ 'sqrt(iv)' -a x -endl                            # normalize the patches
--l[-1] -cov -eigen -k[-1] -columns 0,$4 -endl                   # compute a dictionnary
--repeat $2
+-v - -repeat @# -l[$>]
+  --split_patches[-1] $1,$1
+  -l[-1] -s x -/ 'sqrt(iv)' -a x -endl             # normalize the patches
+  -l[-1] -cov -eigen -k[-1] -columns 0,$4 -endl    # compute a dictionnary
+  -repeat $2
   -if {$2>1} dx={round(?(0,$1))} dy={round(?(0,$1))} -else dx=0 dy=0 -endif
   --shift[0] $dx,$dy,0,0,2
   -l[1,-1]
-    -split_patches[1] $1,$1
-    -transpose[0] --**
-    -l[-1] --abs -sort[-1] -unroll[-1] x  t={$3*@{-1,{@{-1,w}/2}}} -rm[-1] -endl # MAD
-    -f[-1] 'if(abs(i)<$t,0,i)'                                  # threshold the coefficients
-    -rm[1] -transpose[0] --** -rm[-2]                           # project on the dictionnary
+  -split_patches[1] $1,$1
+  -transpose[0] --**
+  t=@{-mad[-1]}
+  -f[-1] 'if(abs(i)<$3*$t,0,i)'                    # threshold the coefficients
+  -rm[1] -transpose[0] --** -rm[-2]                # project on the dictionnary
   -endl
- -append_patches[-1] $1,$1,@{0,w},@{0,h},@{0,s}                 # reconstitute the image from patches
- -shift[-1] {-$dx},{-$dy},0,0,2
--done
--rm[0,1]
--+ -/ $2
--v +
+  -append_patches[-1] $1,$1,@{0,w},@{0,h},@{0,s}   # reconstitute the image from patches
+  -shift[-1] {-$dx},{-$dy},0,0,2
+  -done
+  -rm[0,1]
+  -+ -/ $2
+-endl -done -v +
 
 
 # Local Variables:
