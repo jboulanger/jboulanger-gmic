@@ -215,30 +215,30 @@ n={$1-1}
 -if {$n%2!=0} -reverse -endif
 -v +
 
-#@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0
+#@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0, _blur
 #@gmic : Deblur an image using Richardson-Lucy algorithm.
-#@gmic : Default values  '_nb_iter=10'
+#@gmic : Default values  '_nb_iter=10, _blur=1'
 #@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
-deblur_richardsonlucy : -check "$1>=0 && ${2=10}>=0"
+deblur_richardsonlucy : -check "$1>=0 && ${2=10}>=0 && ${3=1}>=0"
 -e[^-1] "Deblur an image using Richardson-Lucy algorithm with sigma $1 and $2 iterations."
 -v - -repeat @# -l[$>]
   [0]
   -repeat $2
-    --blur[-1] $1 --/[0,-1] -rm[-2] -blur[-1] $1 -*[-1,-2] # u *= H ( f / Hu )
+    --blur[-1] $1,1,$3 --/[0,-1] -rm[-2] -blur[-1] $1,1,$3 -*[-1,-2] # u *= H ( f / Hu )
   -done
   -rm[0]
 -endl -done -v +
 
-#@gmic deblur_goldmeinel : _sigma>0, _nb_iter>0, _acceleration
+#@gmic deblur_goldmeinel : _sigma>0, _nb_iter>0, _acceleration, _blur
 #@gmic : Deblur an image using Gold Meinel algorithm
-#@gmic : Default values '_nb_iter=8, _acceleration=1'
+#@gmic : Default values '_nb_iter=8, _acceleration=1, _blur=1'
 #@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
-deblur_goldmeinel : -check "$1>=0 && ${2=8}>0 && ${3=1}"
+deblur_goldmeinel : -check "$1>=0 && ${2=8}>0 && ${3=1} && ${3=1}>=0"
 -e[^-1] "Deblur an image using Gold-Meinel algorithm with sigma $1 and $2 iterations and acceleration $3."
 -v - -repeat @# -l[$>]
   [0]
   -repeat $2
-    --blur[-1] $1 --/[0,-1] -rm[-2] -pow[-1] $3 -*[-1,-2] # u *= f / Hu
+    --blur[-1] $1,1,$4 --/[0,-1] -rm[-2] -pow[-1] $3 -*[-1,-2] # u *= f / Hu
   -done
   -rm[0]
 -endl -done -v +
@@ -385,12 +385,13 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
 #@gimp Sharpen [Richardson-Lucy] : jeje_deblur_richardsonlucy, jeje_deblur_richardsonlucy_preview
 #@gimp : Sigma = float(1,0.5,10)
 #@gimp : Iterations = int(10,1,100)
+#@gimp : Blur = choice(1,"Exponential","Gaussian")
 #@gimp : Cut = bool(true)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/28</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
 jeje_deblur_richardsonlucy:
   -deblur_richardsonlucy $*
-  -if $3 -c 0,255 -else -n 0,255 -endif
+  -if $4 -c 0,255 -else -n 0,255 -endif
 
 jeje_deblur_richardsonlucy_preview:
   -gimp_split_preview "-jeje_deblur_richardsonlucy $*",$-1
@@ -399,23 +400,24 @@ jeje_deblur_richardsonlucy_preview:
 #@gimp : Sigma = float(1,0.5,10)
 #@gimp : Iterations = int(5,1,15)
 #@gimp : Acceleration = float(1,1,3)
+#@gimp : Blur = choice(1,"Exponential","Gaussian")
 #@gimp : Cut = bool(true)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/28</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
 jeje_deblur_goldmeinel:
   -deblur_goldmeinel $*
-  -if $4 -c 0,255 -else -n 0,255 -endif
+  -if $5 -c 0,255 -else -n 0,255 -endif
 
 jeje_deblur_goldmeinel_preview:
   -gimp_split_preview "-jeje_deblur_goldmeinel $*",$-1
 
 #@gimp Denoise [Patch PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
 #@gimp : Patch = choice(1,4,8,16,32)
-#@gimp : Cycles = int(8,0.1,32)
+#@gimp : Cycles = int(8,1,32)
 #@gimp : Threshold = float(3,0.5,9)
 #@gimp : Components (%) = int(75,1,100)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/28</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
 jeje_denoise_patch_dict:
   -denoise_patch_dict {2^($1+2)},$2,$3,$4%
   -c 0,255
