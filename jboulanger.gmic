@@ -233,7 +233,7 @@ deblur_richardsonlucy : -check "$1>=0 && ${2=10}>=0 && ${3=1}>=0"
 #@gmic : Deblur an image using Gold Meinel algorithm
 #@gmic : Default values '_nb_iter=8, _acceleration=1, _blur=1'
 #@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
-deblur_goldmeinel : -check "$1>=0 && ${2=8}>0 && ${3=1} && ${3=1}>=0"
+deblur_goldmeinel : -check "$1>=0 && ${2=8}>0 && ${3=1} && ${4=1}>=0"
 -e[^-1] "Deblur an image using Gold-Meinel algorithm with sigma $1 and $2 iterations and acceleration $3."
 -v - -repeat @# -l[$>]
   [0]
@@ -261,10 +261,10 @@ s=@{0,a} -repeat $2 -blur $1 --blur {2*$1} -- -cut 0,100% -f 'i*{$s}/ia' -done
 tubeness : -check "${1=1}>0 && ${2=1}>0 && ${3=1}>=0"
 -e[^-1] "Tubeness with scale $1 with $2 iterations and strength $3"
 -v - -repeat @# -l[$>]
-  -repeat $1
+  -repeat $2
    [0]
    -l[-1]
-     -blur $2
+     -blur $1
      -s c -repeat @# -l[$>]
        -hessian -a c -eigen -k[0] -s c -k[1] -* -1 -cut 0,100%
      -endl -done -a c
@@ -321,14 +321,6 @@ midway:
 -+[-1] {$b} -*[-1] {1/$a} -a c
 -endl -done
 
-#@gmic contour2d: _tolerance
-#@gmic : Draw a 2D contour of regions with tolerance _tolerance
-#@gmic : $ image.jpg -norm -blur 1 -gt 50% --contour2d
-contour2d: -skip ${1=.1}
--v - -repeat @# -l[$>]
--f 'if(abs(i(x,y)-i(x+1,y+1))>$1||abs(i(x,y)-i(x+1,y))>$1,1,0)'
--endl -done -v +
-
 #@gmic vobs : _scale
 #@gmic : Motion quantity (Normal motion)  h * (||Ixy|| It) / h * Ixy
 #@gmic : $ 100,100,10 -noise 1 -blur 1 --vobs
@@ -372,6 +364,44 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
   -+ -/ $2
   -crop 0,0,{$oW-1},{$oH-1}
 -endl -done -v +
+
+#---------------------------------
+#
+#@gmic :: Segmentation
+#
+#---------------------------------
+
+#@gmic contour2d: _tolerance
+#@gmic : Draw a 2D contour of regions with tolerance _tolerance
+#@gmic : $ image.jpg -norm -blur 1 -gt 50% --contour2d
+contour2d: -skip ${1=.1}
+-v - -repeat @# -l[$>]
+-f 'if(abs(i(x,y)-i(x+1,y+1))>$1||abs(i(x,y)-i(x+1,y))>$1,1,0)'
+-endl -done -v +
+
+#@gmic segment_snake : _nb_iter,_time_step,_regularization,_threshold
+#@gmic : segment an image using the Active Contour without edges of Chan et Vese
+#@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake 10,1,100,50% -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -resize[0] 100%,100%,1,3,1 -n 0,255 -blend add
+segment_snake: -skip ${1=100},${2=1},${3=100},${4=10%}
+-e[^-1] "Segement the image using active contours without edges"
+-v - -repeat @# -l[$>]
+  --blur 2 -gt[-1] $4                                               # initialization
+  -l[-1] --distance 0 -negative[0] -distance[0] 0 -*[0] -1 -+ -endl # levelset
+  -repeat $1
+    # compute mean and variance of the two regions
+    --gt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} I2={$swx/$sw}
+    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S2={max(1,$swx/$sw)} -rm[-1,-2]
+    --lt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} I1={$swx/$sw}
+    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S1={max(1,$swx/$sw)} -rm[-1,-2]
+    --iee[-1]                                                     # regularization
+    --f[0] '(1.0/$3)*(((i(x,y)-$I1)^2)/$S1-((i(x,y)-$I2)^2)/$S2)' # data term
+    -+[-2,-1]
+    -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}
+    -+[-2,-1]
+  -done
+  -blur[-1] 2 -gt[-1] 0 -rm[0]
+-endl -done -v +
+
 
 #---------------------------------
 #
