@@ -217,9 +217,9 @@ n={$1-1}
 
 #@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0, _blur
 #@gmic : Deblur an image using Richardson-Lucy algorithm.
-#@gmic : Default values  '_nb_iter=10, _blur=1'
+#@gmic : Default values  '_nb_iter=50, _blur=1 (Gaussian)'
 #@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
-deblur_richardsonlucy : -check "$1>=0 && ${2=10}>=0 && ${3=1}>=0"
+deblur_richardsonlucy : -check "$1>=0 && ${2=50}>=0 && ${3=1}>=0"
 -e[^-1] "Deblur an image using Richardson-Lucy algorithm with sigma $1 and $2 iterations."
 -v - -repeat @# -l[$>]
   [0]
@@ -254,23 +254,18 @@ spotify : -check "${1=1}>0 && ${2=1}>0"
 s=@{0,a} -repeat $2 -blur $1 --blur {2*$1} -- -cut 0,100% -f 'i*{$s}/ia' -done
 -endl -done -v +
 
-#@gmic tubeness : _scale>0,_nb_iter>0,_strength
+#@gmic tubeness : _scale>0
 #@gmic : Tubeness filter based on the eigen value of the Hessian
-#@gmic : Default values '_nb_iter=1, _scale=1, _strength=1'
-#@gmic : $ image.jpg --tubeness 3 -n 0,255
-tubeness : -check "${1=1}>0 && ${2=1}>0 && ${3=1}>=0"
--e[^-1] "Tubeness with scale $1 with $2 iterations and strength $3"
+#@gmic : Default values '_scale=1'
+#@gmic : $ image.jpg --tubeness 3
+#@gmic : $ image.jpg --tubeness 1 -n 0,255 -blend add
+tubeness : -check "${1=1}>0"
+-e[^-1] "Tubeness with scale $1."
 -v - -repeat @# -l[$>]
-  -repeat $2
-   [0]
-   -l[-1]
-     -blur $1
-     -s c -repeat @# -l[$>]
-       -hessian -a c -eigen -k[0] -s c -k[1] -* -1 -cut 0,100%
-     -endl -done -a c
-   -endl
-   -*[-1] $3 -+
-   -done
+  -blur $1
+  -s c -repeat @# -l[$>]
+    -hessian -a c -eigen -k[0] -s c -k[1] -* -1 -cut 0,100%
+  -endl -done -a c
 -endl -done -v +
 
 #@gmic schizo : _amplitude,_amplitude_normal,_nb_iterations,_strength
@@ -330,6 +325,18 @@ vobs : -check "${1=1}>0"
 -gradient -a[0,1] c -norm[0] -abs[1] --* -rm[1] -blur $1 -reverse -/
 -endl -done -v +
 
+#@gmic diffusion : _scale,_threshold
+#@gmic : Estimate local diffusion coefficient using D=It/(Ixx+Iyy)
+#@gmic : $ 100,100 -noise .7,2 -blur 2 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -diffusion 1
+diffusion : -check "${1=1}>0"
+-e[^-1] "Diffusion coefficient estimation $1"
+-v - -repeat @# -l[$>]
+--l[0] -s z -laplacian -a z --abs -gt[-1] $1 -endl
+-gradient[0] z,4
+-*[0,1] [2] -rm[2] -/
+-replace_inf 0 -replace_nan 0
+-endl -done -v +
+
 #@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_number_of_pc
 #@gmic : Denoising using a dictionnary of patches learn on the image
 #@gmic : work in progress...
@@ -373,28 +380,30 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
 
 #@gmic contour2d: _tolerance
 #@gmic : Draw a 2D contour of regions with tolerance _tolerance
+#@gmic : Default value _tolerance=.1
 #@gmic : $ image.jpg -norm -blur 1 -gt 50% --contour2d
 contour2d: -skip ${1=.1}
 -v - -repeat @# -l[$>]
 -f 'if(abs(i(x,y)-i(x+1,y+1))>$1||abs(i(x,y)-i(x+1,y))>$1,1,0)'
 -endl -done -v +
 
-#@gmic segment_snake : _nb_iter,_time_step,_regularization,_threshold
-#@gmic : segment an image using the Active Contour without edges of Chan et Vese
-#@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake 10,1,100,50% -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -resize[0] 100%,100%,1,3,1 -n 0,255 -blend add
-segment_snake: -skip ${1=100},${2=1},${3=100},${4=10%}
+#@gmic segment_snake : _nb_iter,_time_step,_smoothness,_threshold
+#@gmic : Segment an image using Chan and Vese's method.
+#@gmic : Default values _nb_iter=10,_time_step=1,_smoothness=100,_threshold=50%
+#@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake , -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -resize[0] 100%,100%,1,3,1 -n 0,255 -blend add
+segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%}
 -e[^-1] "Segement the image using active contours without edges"
 -v - -repeat @# -l[$>]
   --blur 2 -gt[-1] $4                                               # initialization
   -l[-1] --distance 0 -negative[0] -distance[0] 0 -*[0] -1 -+ -endl # levelset
   -repeat $1
     # compute mean and variance of the two regions
-    --gt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} I2={$swx/$sw}
-    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S2={max(1,$swx/$sw)} -rm[-1,-2]
-    --lt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} I1={$swx/$sw}
-    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S1={max(1,$swx/$sw)} -rm[-1,-2]
+    --lt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} M1={$swx/$sw}
+    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S1={max(1,$swx/$sw)-$M1^2} -rm[-1,-2]
+    --gt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} M2={$swx/$sw}
+    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S2={max(1,$swx/$sw)-$M2^2} -rm[-1,-2]
     --iee[-1]                                                     # regularization
-    --f[0] '(1.0/$3)*(((i(x,y)-$I1)^2)/$S1-((i(x,y)-$I2)^2)/$S2)' # data term
+    --f[0] '(1.0/$3)*(((i(x,y)-$M1)^2)/$S1-((i(x,y)-$M2)^2)/$S2)' # data term
     -+[-2,-1]
     -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}
     -+[-2,-1]
@@ -405,7 +414,7 @@ segment_snake: -skip ${1=100},${2=1},${3=100},${4=10%}
 
 #---------------------------------
 #
-#@gmic :: Gimp
+#@gmic ::  GIMP
 #
 #---------------------------------
 #@gimp _<b>Enhancement</b>
