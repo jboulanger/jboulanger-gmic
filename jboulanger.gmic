@@ -334,7 +334,7 @@ diffusion : -check "${1=1}>0"
 --l[0] -s z -laplacian -a z --abs -gt[-1] $1 -endl
 -gradient[0] z,4
 -*[0,1] [2] -rm[2] -/
--replace_inf 0 -replace_nan 0
+-replace_inf 0 -replace_nan 0q
 -endl -done -v +
 
 #@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_number_of_pc
@@ -390,25 +390,27 @@ contour2d: -skip ${1=.1}
 #@gmic segment_snake : _nb_iter,_time_step,_smoothness,_threshold
 #@gmic : Segment an image using Chan and Vese's method.
 #@gmic : Default values _nb_iter=10,_time_step=1,_smoothness=100,_threshold=50%
-#@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake , -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -resize[0] 100%,100%,1,3,1 -n 0,255 -blend add
-segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%}
--e[^-1] "Segement the image using active contours without edges"
+#@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake , -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -n 0,255 -blend add
+segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
+-e[^-1] "Segment the image using active contours without edges using $1 iterations and time step $2, smoothness $3 and initialize with threshold of $4."
 -v - -repeat @# -l[$>]
-  --blur 2 -gt[-1] $4                                               # initialization
+  --blur $5 -gt[-1] $4                                              # initialization
   -l[-1] --distance 0 -negative[0] -distance[0] 0 -*[0] -1 -+ -endl # levelset
   -repeat $1
-    # compute mean and variance of the two regions
-    --lt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} M1={$swx/$sw}
-    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S1={max(1,$swx/$sw)-$M1^2} -rm[-1,-2]
-    --gt[-1] 0 -blur[-1] 2 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} M2={$swx/$sw}
-    -sqr[-1,-2] swx=@{-1,ia} sw=@{-2,ia} S2={max(1,$swx/$sw)-$M2^2} -rm[-1,-2]
+    # compute mean and variance of the two regions (original version is with mean only)
+    # the molified step function is given by a blur of the sharp step function
+    --lt[-1] 0 -blur[-1] $5 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} M1={$swx/$sw}
+    -sqr[-1] swx2=@{-1,ia}  S1={max(1e-3,$swx2/$sw^2-$M1^2)} -rm[-1,-2]
+    --gt[-1] 0 -blur[-1] $5 --*[0,-1] swx=@{-1,ia} sw=@{-2,ia} M2={$swx/$sw}
+    -sqr[-1] swx2=@{-1,ia}  S2={max(1e-3,$swx2/$sw^2-$M2^2)} -rm[-1,-2]
     --iee[-1]                                                     # regularization
     --f[0] '(1.0/$3)*(((i(x,y)-$M1)^2)/$S1-((i(x,y)-$M2)^2)/$S2)' # data term
     -+[-2,-1]
-    -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}
+    -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}           # adaptive time step
     -+[-2,-1]
   -done
-  -blur[-1] 2 -gt[-1] 0 -rm[0]
+  #-echo_stdout $M1" "{sqrt($S1)}" "$M2" "{sqrt($S2)}
+  -blur[-1] $5 -gt[-1] 0 -rm[0]
 -endl -done -v +
 
 
