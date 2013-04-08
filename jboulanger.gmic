@@ -356,7 +356,6 @@ display_ldc :
 -frame 5,12,64 -text "Local diffusion coefficient ["$A" - "$B"]",5,0,13,1,255 -endl -done -a z -endl
 -a x
 
-
 #@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_number_of_pc
 #@gmic : Denoising using a dictionnary of patches learn on the image
 #@gmic : work in progress...
@@ -410,7 +409,7 @@ contour2d: -skip ${1=.1}
 #@gmic segment_snake : _nb_iter,_time_step,_smoothness,_threshold
 #@gmic : Segment an image using an adaptation of Chan and Vese's method.
 #@gmic : Default values _nb_iter=10,_time_step=1,_smoothness=100,_threshold=50%
-#@gmic : Reference . Chan and L. Vese,Active contours without edges, IEEE transactions on image processing 10(2) (2001), pp. 266-277
+#@gmic : Reference Chan and L. Vese,Active contours without edges, IEEE transactions on image processing 10(2) (2001), pp. 266-277
 #@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake , -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -n 0,255 -blend add
 segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
 -e[^-1] "Segment the image using active contours without edges using $1 iterations and time step $2, smoothness $3 and initialize with threshold of $4."
@@ -442,8 +441,6 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
 #
 #---------------------------------
 #@gimp _<b>Enhancement</b>
-
-#@gimp J&#233;j&#233;
 
 #@gimp Sharpen [Richardson-Lucy] : jeje_deblur_richardsonlucy, jeje_deblur_richardsonlucy_preview
 #@gimp : Sigma = float(1,0.5,10)
