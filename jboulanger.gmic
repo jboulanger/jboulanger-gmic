@@ -358,18 +358,18 @@ display_ldc :
 
 #@gmic print_psnr
 #@gmic : Display the psnr on the image list taking the first one as a reference
-#@gmic : $ image.jpg --noise 20 --blur[-1] 1 -print_psnr -a x
+#@gmic : $ image.jpg --noise 20 --blur[-1] 1 -print_psnr
 print_psnr :
--e[^-1] "compute PSNR with image 0 and print it on the other images."
+-e[^-1] "Compute PSNR with image 0 and print it on the other images."
 -v - --psnr ,
--repeat {@#-2} -text_outline[{$>+1}] {round(@{-1,i(0,$>+1)},.01)}"dB",5,5,30,1 -done
+-repeat {@#-2} -text_outline[{$>+1}] "PSNR:"{round(@{-1,i(0,$>+1)},.01)}"dB",5,5,30,1 -done
 -rm[-1] -v +
 
 #@gmic variance_noise
 #@gmic : Estimate the noise variance
-#@gmic : $ -tiger -noise 10 sigma=@{-variance_noise}
+#@gmic : $ image.jpg -noise 10 sigma={round(@{-variance_noise},.1)} -text_outline "Noise std:"$sigma,5,5,30,1
 variance_noise :
--e[^-1] "compute noise variance."
+-e[^-1] "Compute noise variance."
 -v - --laplacian -if {@{0,d}==1}  -u {@{-mad[-1]}/sqrt(20.0)} -else -u {@{-mad[-1]}/sqrt(42.0)} -endif -rm[-1]
 -v +
 
@@ -462,7 +462,7 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
     -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}           # adaptive time step
     -+[-2,-1]
   -done
-  -echo_stdout "("$M1","{sqrt($S1)}");("$M2", "{sqrt($S2)}")"
+#  -echo_stdout "("$M1","{sqrt($S1)}");("$M2", "{sqrt($S2)}")"
   -blur[-1] $5 -gt[-1] 0 -rm[0]
 -endl -done -v +
 
