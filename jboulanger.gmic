@@ -317,19 +317,19 @@ midway:
 -endl -done
 
 #@gmic vobs : _scale
-#@gmic : Motion quantity (Normal motion)  h * (||Ixy||^2 |It|/|Ixy|) / h * Ixy^2
+#@gmic : Motion quantity (Normal motion)  h * (|Ixy|^2 |It|/|Ixy|) / h * Ixy^2
 #@gmic : $ 100,100,10 -noise 1 -blur 1 --vobs
 vobs : -check "${1=1}>0"
 -e[^-1] "Motion quantity with scale $1"
 -v - -repeat @# -l[$>]
--gradient -a[0,1] c -norm[0] -abs[1] -*[1] [0] -sqr[0] -blur $1 -reverse -max[1] 5%  -d -/
+-gradient -a[0,1] c -norm[0] -abs[1] -*[1] [0] -sqr[0] -blur $1 -reverse -max[1] 5% -/
 -endl -done -v +
 
 #@gmic local_diffusion_coefficient : _scale,_threshold
-#@gmic : Estimate local diffusion coefficient It = -D(Ixx+Iyy) using D=It/(Ixx+Iyy)
-#@gmic : $ 100,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -diffusion 1
-local_diffusion_coefficient : -check "${1=1}>0 && ${2=1}>=0"
--e[^-1] "Diffusion coefficient estimation using scale $1 and threshold $2"
+#@gmic : Estimate local diffusion coefficient It - D (Ixx+Iyy)=0 using D=It/(Ixx+Iyy)
+#@gmic : $ 100,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -local_diffusion_coefficient 2,.5
+local_diffusion_coefficient : -check "${1=2}>0 && ${2=.5}>=0"
+-e[^-1] "Local diffusion coefficient estimation using scale $1 and threshold $2"
 -v - -repeat @# -l[$>]
    --l[0] -s z -laplacian -a z -endl           # Ixx+Iyy
    --l[0] -s z -gradient_norm -a z -sqr -endl  # ||Ix+Iy||^2
@@ -347,7 +347,7 @@ ldc :
 
 #@gmic display_ldc :
 #@gmic : Display local diffusion coefficient
-#@gmic : $ 100,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
+#@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
 display_ldc :
 --ldc 2,.5 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
 -resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
@@ -356,25 +356,38 @@ display_ldc :
 -frame 5,12,64 -text "Local diffusion coefficient ["$A" - "$B"]",5,0,13,1,255 -endl -done -a z -endl
 -a x
 
+#@gmic print_psnr
+#@gmic : Display the psnr on the image list taking the first one as a reference
+#@gmic : $ image.jpg --noise 20 --blur[-1] 1 -print_psnr -a x
+print_psnr:
+-e[^-1] "compute PSNR with image 0 and print it on the other images."
+-v - --psnr ,
+-repeat {@#-2} -text_outline[{$>+1}] {round(@{-1,i(0,$>+1)},.01)}"dB",5,5,30,1 -done
+-rm[-1] -v +
+
 #@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_number_of_pc
 #@gmic : Denoising using a dictionnary of patches learn on the image
 #@gmic : work in progress...
-#@gmic : $ image.jpg --noise 20 --denoise_patch_dict[1] 16,8,2,50%
+#@gmic : $ image.jpg --noise 20 --denoise_patch_dict[1] , -print_psnr
 denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
 -e[^-1] "Denoising using a dictionnary of "$1"x"$1" patches with "$2" shifts, threshold "$3" and "$4" of principal components."
 -v - -repeat @# -l[$>]
-  oW=@{0,w} oH=@{0,h} oS=@{0,s} -resize_pow2 0
-  Ntile={round(@{0,w}/$1)}
-  --l[-1] # compute a dictionnary
-    -split_tiles $Ntile pW=@{1,w} pH=@{1,h} # split the image
-    -repeat @# -if {@{$<,iM}==0} -rm[$<] -endif -done #remove back tiles
+  # resize the image (using mirrored version)
+  oW=@{0,w} oH=@{0,h} oS=@{0,s} nW={$1*round($oW/$1,1,1)} nH={$1*round($oH/$1,1,1)}
+  --crop {2*$oW-$nW},0,100%,100% -mirror[-1] x -a x
+  --crop 0,{2*$oH-$nH},100%,100% -mirror[-1] y -a y
+  NtileX={round($nW/$1)}  NtileY={round($nH/$1)}
+  # compute a dictionnary
+  --l[-1]
+    -split_tiles $NtileX,$NtileY pW=@{1,w} pH=@{1,h} # split the image
     -unroll y -a x -- 'ia' --transpose[-1] -**[-2,-1] -eigen -k[-1] -columns 0,$4 # PCA
   -endl
+  # denoise the image using the dictionnary
   -repeat $2
     -if {$2>1} dx={round(?(0,$1))} dy={round(?(0,$1))} -else dx=0 dy=0 -endif
     --shift[0] $dx,$dy,0,0,2
     -l[1,-1]
-      -l[1] -split_tiles $Ntile -unroll y -a x -endl
+      -l[1] -split_tiles $NtileX,$NtileY -unroll y -a x -endl
       -transpose[0] --**                # project on the dictionnary
       t=@{-mad[-1]}                     # estimate variance of coefficients
       -f[-1] 'if(abs(i)<$3*$t,0,i)'     # threshold the coefficients
@@ -382,7 +395,7 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
     -endl
     -l[-1]
        -s x -resize $pW,$pH,1,$oS,-1
-       -append_tiles $Ntile
+       -append_tiles $NtileX,$NtileY
        -shift {-$dx},{-$dy},0,0,2
      -endl
   -done
