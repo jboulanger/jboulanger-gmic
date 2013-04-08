@@ -359,28 +359,47 @@ display_ldc :
 #@gmic print_psnr
 #@gmic : Display the psnr on the image list taking the first one as a reference
 #@gmic : $ image.jpg --noise 20 --blur[-1] 1 -print_psnr -a x
-print_psnr:
+print_psnr :
 -e[^-1] "compute PSNR with image 0 and print it on the other images."
 -v - --psnr ,
 -repeat {@#-2} -text_outline[{$>+1}] {round(@{-1,i(0,$>+1)},.01)}"dB",5,5,30,1 -done
 -rm[-1] -v +
 
-#@gmic denoise_patch_dict :  _patch_size,_number_of_shifts,_threshold,_number_of_pc
+#@gmic variance_noise
+#@gmic : Estimate the noise variance
+#@gmic : $ -tiger -noise 10 sigma=@{-variance_noise}
+variance_noise :
+-e[^-1] "compute noise variance."
+-v - --laplacian -if {@{0,d}==1}  -u {@{-mad[-1]}/sqrt(20.0)} -else -u {@{-mad[-1]}/sqrt(42.0)} -endif -rm[-1]
+-v +
+
+#@gmic denoise_patch_dict : _patch_size,_nb_of_shifts,_thres_comp,_thres_coef
 #@gmic : Denoising using a dictionnary of patches learn on the image
 #@gmic : work in progress...
 #@gmic : $ image.jpg --noise 20 --denoise_patch_dict[1] , -print_psnr
-denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
--e[^-1] "Denoising using a dictionnary of "$1"x"$1" patches with "$2" shifts, threshold "$3" and "$4" of principal components."
+denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
+-e[^-1] "Denoising using a dictionnary of "$1"x"$1" patches with "$2" shifts, threshold $3x(noise std) for components and $4x(std) for coefficients."
 -v - -repeat @# -l[$>]
-  # resize the image (using mirrored version)
+  Sigma=@{-variance_noise[0]} # measure the noise level
+  # mirror to prevent side effect
+  --crop 0,0,$1,100% -mirror[-1] x -reverse --crop[-1] {w-$1-1},0,100%,100% -mirror[-1] x -a x
+  --crop 0,0,100%,$1 -mirror[-1] y -reverse --crop[-1] 0,{h-$1-1},100%,100% -mirror[-1] y -a y
+  # resize the image to get integer nb of tiles (using mirrored version)
   oW=@{0,w} oH=@{0,h} oS=@{0,s} nW={$1*round($oW/$1,1,1)} nH={$1*round($oH/$1,1,1)}
   --crop {2*$oW-$nW},0,100%,100% -mirror[-1] x -a x
   --crop 0,{2*$oH-$nH},100%,100% -mirror[-1] y -a y
   NtileX={round($nW/$1)}  NtileY={round($nH/$1)}
-  # compute a dictionnary
+  # compute a dictionnary (use several shifts)
   --l[-1]
-    -split_tiles $NtileX,$NtileY pW=@{1,w} pH=@{1,h} # split the image
-    -unroll y -a x -- 'ia' --transpose[-1] -**[-2,-1] -eigen -k[-1] -columns 0,$4 # PCA
+    -repeat $2
+      -if {$2>1} dx={round(?(0,$1))} dy={round(?(0,$1))} -else dx=0 dy=0 -endif
+      --shift[0] $dx,$dy,0,0,2
+      -split_tiles[-1] $NtileX,$NtileY pW=@{1,w} pH=@{1,h} # split the image
+    -done -rm[0]
+    -unroll y -a x n=@{-1,w} -- 'ia' --transpose[-1] -**[-2,-1] -/ $n -eigen # PCA
+    # select components based on noise level
+    -l[-2] -unroll x -sqrt -gt {$3*$Sigma} -f 'abs(i(x+1)-i(x))' T=@{-1,C} 4 -f[-1] $T T=@{-1,i(0)} -endl
+    -if {$T==0} T=100% -endif -k[-1] -columns 0,$T
   -endl
   # denoise the image using the dictionnary
   -repeat $2
@@ -390,7 +409,7 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
       -l[1] -split_tiles $NtileX,$NtileY -unroll y -a x -endl
       -transpose[0] --**                # project on the dictionnary
       t=@{-mad[-1]}                     # estimate variance of coefficients
-      -f[-1] 'if(abs(i)<$3*$t,0,i)'     # threshold the coefficients
+      -f[-1] 'if(abs(i)<$4*$t,0,i)'     # threshold the coefficients
       -rm[1] -transpose[0] --** -rm[-2] # project back
     -endl
     -l[-1]
@@ -401,7 +420,7 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=2},${4=100%}
   -done
   -rm[0,1]
   -+ -/ $2
-  -crop 0,0,{$oW-1},{$oH-1}
+  -crop {$1+1},{$1+1},{$oW-$1-2},{$oH-$1-2}
 -endl -done -v +
 
 #---------------------------------
@@ -484,16 +503,18 @@ jeje_deblur_goldmeinel:
 jeje_deblur_goldmeinel_preview:
   -gimp_split_preview "-jeje_deblur_goldmeinel $*",$-1
 
-#@gimp Denoise [Patch PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
+#@gimp Denoise [Block PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
 #@gimp : Patch = choice(1,4,8,16,32)
 #@gimp : Cycles = int(8,1,32)
-#@gimp : Threshold = float(3,0.5,9)
-#@gimp : Components (%) = int(75,1,100)
+#@gimp : Components = float(1.1,1,9)
+#@gimp : Coefficients = float(1.1,0,9)
+#@gimp : Remix = float(0,0,1)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note(<b>Note:</b>This filter is quite time consuming.)
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
 jeje_denoise_patch_dict:
-  -denoise_patch_dict {2^($1+2)},$2,$3,$4%
-  -c 0,255
+  --denoise_patch_dict {2^($1+2)},$2,$3,$4
+  -*[0] $5 -*[1] {1-$5} -+ -c 0,255
 
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
