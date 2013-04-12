@@ -79,18 +79,18 @@ boundingbox3d : -skip ${1=10}
 -+3d
 -endl -done
 
-#@gmic rendervolume
+#@gmic rendervolume  : _size,_quality,_opacity
 #@gmic : Pseudo volumic rendering
 #@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -rendervolume
 rendervolume: -skip ${1=8},${2=5},${3=.1}
 -e[^-1] "Pseudo volumic rendering of image with size $1 quality $2 and opactiy $3"
 -v - -repeat @# -l[$>]
 -mirror x -n 1,256 --tones $2 -r[1--1] 100%,100%,100%,3,1 -*[1--1] [0] -rm[0,1]
--repeat @# -if {@{$<,iM}>0} -pointcloud3d[$<]  -gaussians3d[$<] $1,{$3*($<+1)/$2} -else -rm[$<] -endif -done
--+3d -md3d -1 -+3d 0,0,{0.5*$1}
+-repeat @# -if {@{$<,iM}>0} -pointcloud3d[$<] -gaussians3d[$<] $1,{$3*($<+1)/$2} -else -rm[$<] -endif -done
+-+3d -md3d -1  -+3d {.5},{.5},{.5}
 -endl -done -v +
 
-#@gmic displayvolume
+#@gmic displayvolume : _size,_quality,_opacity
 #@gmic : Display the volume with black background, a bounding box and a volumic rendering of the data
 #@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -displayvolume 8,5,.1
 displayvolume: -skip ${1=8},${2=5},${3=.1}
@@ -101,6 +101,15 @@ displayvolume: -skip ${1=8},${2=5},${3=.1}
 -+3d
 -background3d 0,0,0
 -v +
+
+#@gmic view3d : _angle1,_angle2
+#@gmic : Apply a 3D view
+#@gmic : $ 50,50,50,3 -noise 10 -blur 5 -max 0 -n 0,255 -displayvolume 32,5,1 -view3d
+view3d : -skip ${1=25},${2=-120}
+-e[^-1] "Apply 3D view"
+-v - -repeat @# -l[$>]
+-rotate3d 0,0,1,$1 -rotate3d 1,0,0,$2
+-endl -done -v +
 
 #@gmic colordepth
 #@gmic : Color depth coding
@@ -196,6 +205,26 @@ croparound :  -skip ${1=10},${2=10}
   -endif
 -done -rm[0,1] -v +
 
+#@gmic random_walks : width,height,length,number,speed
+#@gmic : Generate random walks tracks (list of coordinates x,y,t as a Nx3 image.)
+#@gmic : $ 100,100,20  -random_walks 100,100,20,5,1 -circles 1 -k[0] -blur_xy 1 -s z -max
+#@gmic : 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -displayvolume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0
+random_walks :
+number=$4 width=$1 height=$2 length=$3 speed=$5
+$number,3
+-l[-1]
+  -noise 1,1
+  -sh 0,0,0,0 -n[-1] 1,{$width-1} -rm[-1]
+  -sh 1,1,0,0 -n[-1] 1,{$height-1} -rm[-1]
+  -sh 2,2,0,0 -f[-1] 0 -rm[-1]
+  -repeat {$length-1} --l[-1]
+    -noise 1
+    -sh 0,0,0,0 -c[-1] 1,{$width-2} -rm[-1]
+    -sh 1,1,0,0 -c[-1] 1,{$height-2} -rm[-1]
+    -sh 2,2,0,0 -f[-1] '$>+1' -rm[-1]
+  -endl -done -a x
+-endl
+
 #---------------------------------
 #
 #@gmic :: Filtering and deconvolution
@@ -214,6 +243,14 @@ n={$1-1}
 -done
 -if {$n%2!=0} -reverse -endif
 -v +
+
+#@gmic whiten_frequency : _alpha
+#@gmic : Whitening filter (equalize the frequency of the image; nothing todo with color)
+whiten_frequency : -check "${1=.25}>=0"
+-e[^-1] "Whiten the frequency with parameter "$1
+-v - -repeat @# -l[$>]
+-fft --a c -norm[-1] -pow[-1] $1 -max[-1] 1e-12 -/[0-1] [2] -rm[2] -ifft -k[0]
+-endl -done -v +
 
 #@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0, _blur
 #@gmic : Deblur an image using Richardson-Lucy algorithm.
@@ -319,11 +356,23 @@ midway:
 #@gmic vobs : _scale
 #@gmic : Motion quantity (Normal motion)  h * (|Ixy|^2 |It|/|Ixy|) / h * Ixy^2
 #@gmic : $ 100,100,10 -noise 1 -blur 1 --vobs
-vobs : -check "${1=1}>0"
+vobs : -check "${1=1}>0 && ${2=3}>0"
 -e[^-1] "Motion quantity with scale $1"
 -v - -repeat @# -l[$>]
--gradient -a[0,1] c -norm[0] -abs[1] -*[1] [0] -sqr[0] -blur $1 -reverse -max[1] 5% -/
+-gradient -a[0,1] c -norm[0] -abs[1] -*[1] [0] -sqr[0] -blur $1,1,1 -reverse -max[1] 5% -/
 -endl -done -v +
+
+#@gmic display_vobs :
+#@gmic : Display local diffusion coefficient
+#@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
+display_vobs :
+--vobs 1 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
+-resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
+-l[0] -s z -frame 5,12,64 -shift 0,5,0,0,2 -text "Original sequence",5,0,13,1,255 -a z -endl
+-l[1] -s z -repeat @# -l[$>] 1,100% -f[-1] 'h-y' -n 0,255  -map[-1] 5 -resize[-1] 5,@{0,h},1,3,5 -frame[-1] 3,0,64  -resize[-1] 100%,@{0,h},1,3,5 -a x
+-frame 5,12,64 -shift 0,5,0,0,2
+-text "Vobs ["$A":"$B"]",5,0,13,1,255 -endl -done -a z -endl
+-a x
 
 #@gmic local_diffusion_coefficient : _scale,_threshold
 #@gmic : Estimate local diffusion coefficient It - D (Ixx+Iyy)=0 using D=It/(Ixx+Iyy)
@@ -334,11 +383,12 @@ local_diffusion_coefficient : -check "${1=2}>0 && ${2=.5}>=0"
    --l[0] -s z -laplacian -a z -endl           # Ixx+Iyy
    --l[0] -s z -gradient_norm -a z -sqr -endl  # ||Ix+Iy||^2
    -gradient[0] z,1                            # It
-   -l[0,1] # try to divide the two images as stably as possible
-     -a c -f 'b=i(x,y,z,0);a=i(x,y,z,1);if(abs(a)>abs(b),b/a,1/(b/a))' -channels 0
+   -l[0,1] # try to compute It/Ixx+Iyy as stably as possible
+     R={@{1,ia}+$2*sqrt(@{1,v})}
+     -a c -f 'b=i(x,y,z,0);a=i(x,y,z,1);if(abs(a)>abs(b),b/a,if(abs(b)>$R,1/(b/a),0))'
+     -channels 0
    -endl
-   -*[0] [1] -blur $1,1,1 -max[1] {ia+$2*sqrt(iv)}
-   -/
+   -*[0] [1] -blur $1,1,1 -max[1] {@{1,ia}+$2*sqrt(@{1,v})}  -/
    -channels 0
 -v + -endl -done
 
@@ -349,26 +399,27 @@ ldc :
 #@gmic : Display local diffusion coefficient
 #@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
 display_ldc :
---ldc 2,.5 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
+--ldc 5,3 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
 -resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
--l[0] -s z -frame 5,12,64 -text "Original sequence",5,0,13,1,255 -a z -endl
--l[1] -s z -repeat @# -l[$>] 1,100% -f[-1] 'h-y' -n 0,255 -resize[-1] 10,100% -map[-1] 5 -a x
--frame 5,12,64 -text "Local diffusion coefficient ["$A" - "$B"]",5,0,13,1,255 -endl -done -a z -endl
+-l[0] -s z -frame 5,12,64 -shift 0,5,0,0,2 -text "Original sequence",5,0,13,1,255 -a z -endl
+-l[1] -s z -repeat @# -l[$>] 1,100% -f[-1] 'h-y' -n 0,255  -map[-1] 5 -resize[-1] 5,@{0,h},1,3,5 -frame[-1] 3,0,64  -resize[-1] 100%,@{0,h},1,3,5 -a x
+-frame 5,12,64 -shift 0,5,0,0,2
+-text "Local diffusion coefficient ["$A":"$B"]",5,0,13,1,255 -endl -done -a z -endl
 -a x
 
-#@gmic print_psnr
+#@gmic print_psnr : _max_value
 #@gmic : Display the psnr on the image list taking the first one as a reference
 #@gmic : $ image.jpg --noise 20 --blur[-1] 1 -print_psnr
-print_psnr :
+print_psnr : -skip ${1=255}
 -e[^-1] "Compute PSNR with image 0 and print it on the other images."
--v - --psnr ,
+-v - --psnr $1
 -repeat {@#-2} -text_outline[{$>+1}] "PSNR:"{round(@{-1,i(0,$>+1)},.01)}"dB",5,5,30,1 -done
 -rm[-1] -v +
 
-#@gmic variance_noise
+#@gmic noise_std
 #@gmic : Estimate the noise variance
-#@gmic : $ image.jpg -noise 10 sigma={round(@{-variance_noise},.1)} -text_outline "Noise std:"$sigma,5,5,30,1
-variance_noise :
+#@gmic : $ image.jpg -noise 10 sigma={round(@{-noise_std},.1)} -text_outline "Noise std:"$sigma,5,5,30,1
+noise_std :
 -e[^-1] "Compute noise variance."
 -v - --laplacian -if {@{0,d}==1}  -u {@{-mad[-1]}/sqrt(20.0)} -else -u {@{-mad[-1]}/sqrt(42.0)} -endif -rm[-1]
 -v +
@@ -380,7 +431,7 @@ variance_noise :
 denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
 -e[^-1] "Denoising using a dictionnary of "$1"x"$1" patches with "$2" shifts, threshold $3x(noise std) for components and $4x(std) for coefficients."
 -v - -repeat @# -l[$>]
-  Sigma=@{-variance_noise[0]} # measure the noise level
+  Sigma=@{-noise_std[0]} # measure the noise level
   # mirror to prevent side effect
   --crop 0,0,$1,100% -mirror[-1] x -reverse --crop[-1] {w-$1-1},0,100%,100% -mirror[-1] x -a x
   --crop 0,0,100%,$1 -mirror[-1] y -reverse --crop[-1] 0,{h-$1-1},100%,100% -mirror[-1] y -a y
@@ -398,7 +449,8 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
     -done -rm[0]
     -unroll y -a x n=@{-1,w} -- 'ia' --transpose[-1] -**[-2,-1] -/ $n -eigen # PCA
     # select components based on noise level
-    -l[-2] -unroll x -sqrt -gt {$3*$Sigma} -f 'abs(i(x+1)-i(x))' T=@{-1,C} 4 -f[-1] $T T=@{-1,i(0)} -endl
+    -l[-2] -unroll x -sqrt -gt {$3*$Sigma} -f 'abs(i(x+1)-i(x))'
+    T=@{-1,C} 4 -f[-1] $T T=@{-1,i(0)} -endl
     -if {$T==0} T=100% -endif -k[-1] -columns 0,$T
   -endl
   # denoise the image using the dictionnary
@@ -473,6 +525,19 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
 #
 #---------------------------------
 #@gimp _<b>Enhancement</b>
+
+#@gimp Sharpen [Whiten] : jeje_whiten_frequency, jeje_whiten_frequency_preview
+#@gimp : Alpha = float(50,0,100)
+#@gimp : Cut = bool(false)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note(<b>Note:</b>This filter equalizes frequencies in the image.)
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
+jeje_whiten_frequency :
+  -whiten_frequency {exp($1/100)-1}
+  -if $2 -c 0,255 -else -n 0,255 -endif
+
+jeje_whiten_frequency_preview :
+  -gimp_split_preview "-jeje_whiten_frequency $*",$-1
 
 #@gimp Sharpen [Richardson-Lucy] : jeje_deblur_richardsonlucy, jeje_deblur_richardsonlucy_preview
 #@gimp : Sigma = float(1,0.5,10)
