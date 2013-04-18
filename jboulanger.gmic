@@ -189,7 +189,7 @@ addtext : -skip ${1=21},${2=128}
   -endif
 -done
 
-#@gmic croparound : _size
+#@gmic croparound : _size_xy,_size_z
 #@gmic : Crop image [0] around coordinates given by image [1]
 #@gmic : $ image.jpg 100%,100% -f[-1] 0 -noise[-1] .1,2 --pointscoordinates[-1] --croparound[0,-1] 5 -append_tiles[3--1] ,  -rm[-2] -dilate[1] 5 -*[1] 128 -blend[0,1] add
 croparound :  -skip ${1=10},${2=10}
@@ -208,7 +208,7 @@ croparound :  -skip ${1=10},${2=10}
 #@gmic random_walks : width,height,length,number,speed
 #@gmic : Generate random walks tracks (list of coordinates x,y,t as a Nx3 image.)
 #@gmic : $ 100,100,20  -random_walks 100,100,20,5,1 -circles 1 -k[0] -blur_xy 1 -s z -max
-#@gmic : 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -displayvolume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0
+#@gmic : 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -displayvolume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0 -autocrop
 random_walks :
 number=$4 width=$1 height=$2 length=$3 speed=$5
 $number,3
@@ -244,12 +244,73 @@ n={$1-1}
 -if {$n%2!=0} -reverse -endif
 -v +
 
+#@gmic fftshift :
+#@gmic : shift a image so that the fft has it center in the middle
+#@gmic : $ image.jpg -fftshift
+fftshift :
+-v - -repeat @# -l[$>]
+-shift {-int(w/2)},{-int(h/2)},{-int(d/2)},0,2
+-endl -done -v +
+
 #@gmic whiten_frequency : _alpha
 #@gmic : Whitening filter (equalize the frequency of the image; nothing todo with color)
+#@gmic : $ image.jpg -whiten_frequency .25
 whiten_frequency : -check "${1=.25}>=0"
 -e[^-1] "Whiten the frequency with parameter "$1
 -v - -repeat @# -l[$>]
 -fft --a c -norm[-1] -pow[-1] $1 -max[-1] 1e-12 -/[0-1] [2] -rm[2] -ifft -k[0]
+-endl -done -v +
+
+#@gmic periodize :
+#@gmic : Periodization of the image
+#@gmic : image.jpg -periodize
+periodize :
+-e[^-1] "periodize"
+-v - -repeat @# -l[$>]
+-if {w>1} --mirror x -a x -endif
+-if {h>1} --mirror y -a y -endif
+-if {d>1} --mirror z -a z -endif
+-endl -done -v +
+
+#@gmic tape :
+#@gmic : apply a Hann window
+#@gmic : image.jpg -tape ,
+tape :
+-e[^-1] "apply a Hann tapering window"
+-v - -repeat @# -l[$>]
+   -if {w>1} -f 'i*sin(pi*x/(w-1))^2' -endif
+   -if {h>1} -f 'i*sin(pi*y/(h-1))^2' -endif
+   -if {d>1} -f 'i*sin(pi*z/(d-1))^2' -endif
+-endl -done -v +
+
+#@gmic autocorrelate :
+#@gmic : Autocorrelation
+#@gmic : $ image.jpg -autocorrelate
+autocorrelate :
+-e[^-1] "Compute autocorrelation"
+-v - -repeat @# -l[$>]
+-fft -sqr -+ -sqrt -ifft -k[0] -fftshift
+-endl -done -v +
+
+#@gmic psf :
+#@gmic : Generate a PSF
+psf : -skip ${1=1.40},${2=1.33},${3=488},${4=160}
+C={2*pi/$3*$1/$2*50}
+-v - -repeat @# -l[$>]
+-f 'dx=x-w/2;dy=y-h/2;dz=z-d/2;if($C*sqrt(dx*dx+dy*dy)<(d-abs(dz)),1,0)'
+-blur 1
+-s z -repeat @# -l[$>] -fftpolar -k[0] -endl -done -a z
+-sqr
+-endl -done -v +
+
+#@gmic beads2psf :
+#@gmic : Compute an approximate PSF from an image bead using autocorrelation method
+beads2psf : -skip ${1=5}
+-e[^-1] "Compute a PSF from an image bead using autocorrelation method"
+-v - -repeat @# -l[$>]
+-tape 1  -autocorrelate -threshold {sqrt(@{0,iv})},1
+-f 'dx=x-w/2;dy=y-h/2;dz=z-d/2;sigma=9+$1*dz*dz;i*exp(-.5*(dx*dx+dy*dy)/(sigma))/sqrt(2*pi*sigma)'
+-sqr
 -endl -done -v +
 
 #@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0, _blur
@@ -583,6 +644,38 @@ jeje_denoise_patch_dict:
 
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
+
+
+#@gimp _<b>Testing</b>
+#@gimp <i>J&#233;J&#233;</i>
+#@gimp 3D Rendering: jeje_render3d, jeje_render3d_preview
+#@gimp : Input image = file()
+#@gimp : Size = int(8,4,16)
+#@gimp : Quality = int(6,2,16)
+#@gimp : Opacity = float(0.1,0,1)
+#@gimp : AngleX = float(240,0,360)
+#@gimp : AngleY = float(0,0,360)
+#@gimp : AngleZ = float(30,0,360)
+#@gimp : Zoom = float(1,0,3)
+#@gimp : Render = bool(false)
+#@gimp : sep = separator(), note = note(<b>Note:</b>Use the image as background. Use preview to adjust the 3D view.)
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
+jeje_render3d:
+  W=@{0,w}
+  -i $1
+  -l[-1]
+  -if $9 -displayvolume $2,$3,$4 -else  -boundingbox3d 20 -endif
+  -rotate3d 0,0,1,$7
+  -rotate3d 0,1,0,$6
+  -rotate3d 1,0,0,$5
+  -c3d -n3d -*3d {3*$W*$8/4}
+  -endl
+  -object3d[0] [1],50%,50%,0,1
+  -n 0,255
+  -rm[1]
+
+jeje_render3d_preview:
+    -jeje_render3d $*
 
 
 # Local Variables:
