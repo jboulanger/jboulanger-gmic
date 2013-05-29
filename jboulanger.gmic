@@ -689,6 +689,26 @@ jeje_denoise_patch_dict:
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
+#@gimp _<b>Patterns/</b>
+#@gimp Periodic dots: jeje_periodic_dots, jeje_periodic_dots_preview
+#@gimp : Number = int(6,2,32)
+#@gimp : Scale = float(4,1,12)
+#@gimp : Angle = float(0,0,360)
+#@gimp : Repeat = int(1,1,10)
+#@gimp : Map = choice(None,default,HSV,lines,hot,cool,jet,flag,cube)
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/05/29</i>.</small>")
+jeje_periodic_dots:
+  tW={max(w,h)/$4}
+  $tW,$tW
+  -periodic_dots[-1] $*
+  -repeat {$4*$4-1}
+   -i [-1]
+  -done
+  -append_tiles[1--1] $4,$4 -k[-1]
+  -if {$5>0} -n 0,255 -map {$5-1} -endif
+
+jeje_periodic_dots_preview:
+  -jeje_periodic_dots $*
 
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
@@ -725,25 +745,7 @@ jeje_render3d:
 jeje_render3d_preview:
     -jeje_render3d $*
 
-#@gimp Periodic dots: jeje_periodic_dots, jeje_periodic_dots_preview
-#@gimp : Number = int(6,2,32)
-#@gimp : Scale = float(4,1,12)
-#@gimp : Angle = float(0,0,360)
-#@gimp : Repeat = int(1,1,10)
-#@gimp : Map = choice(None,default,HSV,lines,hot,cool,jet,flag,cube)
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/05/29</i>.</small>")
-jeje_periodic_dots:
-  tW={max(w,h)/$4}
-  $tW,$tW
-  -periodic_dots[-1] $*
-  -repeat {$4*$4-1}
-   -i [-1]
-  -done
-  -append_tiles[1--1] $4,$4 -k[-1]
-  -if {$5>0} -n 0,255 -map {$5-1} -endif
 
-jeje_periodic_dots_preview:
-  -jeje_periodic_dots $*
 
 # Local Variables:
 # mode: sh
