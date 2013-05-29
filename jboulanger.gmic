@@ -636,12 +636,12 @@ fractal_noise : -skip ${1=10%},${2=2},${3=1}
 -k[0]
 -endl -done -v +
 
-#@gmic cloud : _density_of_blue_sky,_amplitude,_fractal_dimension,_epsilon
-cloud : -skip ${1=50%},${2=1},${3=2},${4=1}
+#@gmic clouds : _density_of_blue_sky,_amplitude,_fractal_dimension,_epsilon
+clouds : -skip ${1=50%},${2=1},${3=2},${4=1}
 -v - -repeat @# -l[$>]
 -channels 0 -f 0
--fractal_noise $2,$3,$4 -negative -min $1 -negative -n 0,255 -resize 100%,100%,1,4
--s c -n[0-2] 200,255 -a c
+-fractal_noise $2,$3,$4 -negative -min $1 -negative -resize 100%,100%,1,4
+-s c -n[0-2] 128,255 -n[3] 0,255 -a c
 -endl -done -v +
 
 #@gmic clearbluesky:
@@ -735,14 +735,14 @@ jeje_periodic_dots:
 jeje_periodic_dots_preview:
   -jeje_periodic_dots $*
 
-#@gimp Cloud : jeje_cloud, jeje_cloud_preview
+#@gimp Clouds : jeje_clouds, jeje_clouds_preview
 #@gimp : Density = float(50,0,100)
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/05/29</i>.</small>")
-jeje_cloud :
- --cloud $1% -blend alpha
+jeje_clouds :
+ --clouds $1% -blend alpha
 
-jeje_cloud_preview :
- -jeje_cloud $1
+jeje_clouds_preview :
+ -jeje_clouds $1
 
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
