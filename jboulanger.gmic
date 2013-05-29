@@ -689,7 +689,7 @@ jeje_denoise_patch_dict:
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
-#@gimp _<b>Patterns/</b>
+#@gimp _<b>Patterns</b>
 #@gimp Periodic dots: jeje_periodic_dots, jeje_periodic_dots_preview
 #@gimp : Number = int(6,2,32)
 #@gimp : Scale = float(4,1,12)
