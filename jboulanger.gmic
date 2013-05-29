@@ -701,14 +701,18 @@ jeje_denoise_patch_dict_preview:
 #@gimp : AngleY = float(0,0,360)
 #@gimp : AngleZ = float(30,0,360)
 #@gimp : Zoom = float(1,0,3)
+#@gimp : Top color = color(32,32,64,255)
+#@gimp : Bottom Color = color(64,128,96,255)
 #@gimp : Render = bool(false)
 #@gimp : sep = separator(), note = note(<b>Note:</b>Adjust the 3D view first and then enable render to compute the volume rendering.)
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/03/29</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/05/29</i>.</small>")
 jeje_render3d:
   W=@{0,w}
+  1,2,1,4 -f[-1] $9,$13,$10,$14,$11,$15,$12,$16 -resize[-1] @{0,w},@{0,h},1,4,5
+  -blend alpha
   -i $1 -a[1--1] z
   -l[-1]
-  -if $9 -displayvolume $2,$3,$4 -else  -boundingbox3d 20 -endif
+  -if $17 -displayvolume $2,$3,$4 -else  -boundingbox3d 20 -endif
   -rotate3d 0,0,1,$7
   -rotate3d 0,1,0,$6
   -rotate3d 1,0,0,$5
@@ -726,6 +730,8 @@ jeje_render3d_preview:
 #@gimp : Scale = float(4,1,12)
 #@gimp : Angle = float(0,0,360)
 #@gimp : Repeat = int(1,1,10)
+#@gimp : Map = choice(None,default,HSV,lines,hot,cool,jet,flag,cube)
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/05/29</i>.</small>")
 jeje_periodic_dots:
   tW={max(w,h)/$4}
   $tW,$tW
@@ -734,6 +740,7 @@ jeje_periodic_dots:
    -i [-1]
   -done
   -append_tiles[1--1] $4,$4 -k[-1]
+  -if {$5>0} -n 0,255 -map {$5-1} -endif
 
 jeje_periodic_dots_preview:
   -jeje_periodic_dots $*
