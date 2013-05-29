@@ -79,15 +79,29 @@ boundingbox3d : -skip ${1=10}
 -+3d
 -endl -done
 
+#@gmic ticks3d :
+ticks3d : -skip ${4=16}
+-e[^-1] "ticks 3D"
+-l
+-repeat {$1/10} 100,$4,1,3,0 -l[-1] -text $>,0,0,$4,1,255,255,255 -autocrop -sprite3d -+3d {$>/10},0,0 -endl -done
+-repeat {$2/10} 100,$4,1,3,0 -l[-1] -text $>,0,0,$4,1,255,255,255 -autocrop -sprite3d -+3d 0,{$>/10},0 -endl -done
+-repeat {$3/10} 100,$4,1,3,0 -l[-1] -text $>,0,0,$4,1,255,255,255 -autocrop -sprite3d -+3d 0,0,{$>/10} -endl -done
+-+3d
+-endl
+
 #@gmic rendervolume  : _size,_quality,_opacity
 #@gmic : Pseudo volumic rendering
 #@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -rendervolume
 rendervolume: -skip ${1=8},${2=5},${3=.1}
 -e[^-1] "Pseudo volumic rendering of image with size $1 quality $2 and opactiy $3"
 -v - -repeat @# -l[$>]
--mirror x -n 1,256 --tones $2 -r[1--1] 100%,100%,100%,3,1 -*[1--1] [0] -rm[0,1]
--repeat @# -if {@{$<,iM}>0} -pointcloud3d[$<] -gaussians3d[$<] $1,{$3*($<+1)/$2} -else -rm[$<] -endif -done
--+3d -md3d -1  -+3d {.5},{.5},{.5}
+-mirror x
+-repeat $2
+--l[0]
+  --threshold2 {($>+1)/($2+1)*(iM-im)+im},{($>+2)/($2+1)*(iM-im)+im+1}
+  -*[-2,-1]
+  -pointcloud3d -gaussians3d $1,{$3*($<+1)/$2}
+-endl -done -rm[0] -+3d -md3d -1  -+3d {.5},{.5},{.5}
 -endl -done -v +
 
 #@gmic displayvolume : _size,_quality,_opacity
@@ -139,12 +153,22 @@ colordepth_scale: -skip ${1=5}
 #@gmic : $ 100,100,100 -noise 1 -blur 2 -detectevents
 detectevents : -skip ${1=1},${2=1},${3=9}
 -e[^-1] "detect events with scale_xy $1 scale_z $2 and threshold $3"
--v -
--repeat @# -l[$>]
+-v - -repeat @# -l[$>]
 -blur_xy $1 -blur_z $2 -structuretensors -blur_xy $1 -blur_z $2
 -s z -repeat @# -l[$>] -eigen -k[0] -s c -k[2] -endl -done -a z
 thres={@{0,ia}+$3*sqrt(@{0,iv})}
 --max_patch[0] 8 -threshold[0] $thres -*
+-endl -done -v +
+
+#@gmic detect_spots : _scale,_threshold
+#@gmic : Detect spots in the image
+#@gmic : $ 100,100 -noise .2,2 -blur 1 -n 0,255 -noise 5 -detect_spots , -pointscoordinates[-1] -resize[0] 100%,100%,1,3,1 -circles 5,.5,128,128,32 -k[0]
+detect_spots : -skip ${1=1},${2=4}
+-e[^-1] "detect events with scale $1 and threshold $2"
+-v - -repeat @# -l[$>]
+-blur $1 --blur $1 --
+thres={$2*@{-mad[0]}}
+--max_patch[0] 3 --threshold[0] $thres -*
 -endl -done -v +
 
 #@gmic pointscoordinates
@@ -208,7 +232,7 @@ croparound :  -skip ${1=10},${2=10}
 #@gmic random_walks : width,height,length,number,speed
 #@gmic : Generate random walks tracks (list of coordinates x,y,t as a Nx3 image.)
 #@gmic : $ 100,100,20  -random_walks 100,100,20,5,1 -circles 1 -k[0] -blur_xy 1 -s z -max
-#@gmic : 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -displayvolume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0 -autocrop
+#@gmic : $ 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -displayvolume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0 -autocrop
 random_walks :
 number=$4 width=$1 height=$2 length=$3 speed=$5
 $number,3
@@ -263,7 +287,7 @@ whiten_frequency : -check "${1=.25}>=0"
 
 #@gmic periodize :
 #@gmic : Periodization of the image
-#@gmic : image.jpg -periodize
+#@gmic : $ image.jpg -periodize
 periodize :
 -e[^-1] "periodize"
 -v - -repeat @# -l[$>]
@@ -274,7 +298,7 @@ periodize :
 
 #@gmic tape :
 #@gmic : apply a Hann window
-#@gmic : image.jpg -tape ,
+#@gmic : $ image.jpg -tape
 tape :
 -e[^-1] "apply a Hann tapering window"
 -v - -repeat @# -l[$>]
@@ -402,7 +426,7 @@ warp_affine :
 #@gmic midway
 #@gmic : Midway equalization of two channels
 #@gmic : $ image.jpg -channels 0,1 -s c -*[-1] 2 -a c --midway
-midway:
+midway :
 -repeat @# -l[$>]
 --l[0]
   -resize 20%,20%
@@ -580,6 +604,26 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
 -endl -done -v +
 
 
+#@gmic dots : _nb_angles,_scale
+#@gmic make a peridic dot pattern
+#@gmic $ 64,64 -dots 3,6,.1 -repeat 34 -i [0]  -done   -append_tiles
+periodic_dots : -skip ${1=6},${2=4},${3=.5}
+-v - -repeat @# -l[$>]
+ -s c -repeat @# -l[$>]
+ --resize {max(w,h)},{max(w,h)},100%,100%,0
+ -l[-1]
+ -f 0
+ -repeat $1
+   -circle {w*(.5+.5/$2*cos(2*pi*($>+$3/180*pi)/$1))},{w*(.5+.5/$2*sin(2*pi*($>+$3/180*pi)/$1))},0,1,255
+ -done
+ -fft -a c -norm -fftshift -n 0,255
+ -endl
+ -resize[-1] [0],0
+ -k[-1]
+ -endl -done -a c
+-endl -done -v +
+
+
 #---------------------------------
 #
 #@gmic ::  GIMP
@@ -658,11 +702,11 @@ jeje_denoise_patch_dict_preview:
 #@gimp : AngleZ = float(30,0,360)
 #@gimp : Zoom = float(1,0,3)
 #@gimp : Render = bool(false)
-#@gimp : sep = separator(), note = note(<b>Note:</b>Use the image as background. Use preview to adjust the 3D view.)
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
+#@gimp : sep = separator(), note = note(<b>Note:</b>Adjust the 3D view first and then enable render to compute the volume rendering.)
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/03/29</i>.</small>")
 jeje_render3d:
   W=@{0,w}
-  -i $1
+  -i $1 -a[1--1] z
   -l[-1]
   -if $9 -displayvolume $2,$3,$4 -else  -boundingbox3d 20 -endif
   -rotate3d 0,0,1,$7
@@ -677,6 +721,22 @@ jeje_render3d:
 jeje_render3d_preview:
     -jeje_render3d $*
 
+#@gimp Periodic dots: jeje_periodic_dots, jeje_periodic_dots_preview
+#@gimp : Number = int(6,2,32)
+#@gimp : Scale = float(4,1,12)
+#@gimp : Angle = float(0,0,360)
+#@gimp : Repeat = int(1,1,10)
+jeje_periodic_dots:
+  tW={max(w,h)/$4}
+  $tW,$tW
+  -periodic_dots[-1] $*
+  -repeat {$4*$4-1}
+   -i [-1]
+  -done
+  -append_tiles[1--1] $4,$4 -k[-1]
+
+jeje_periodic_dots_preview:
+  -jeje_periodic_dots $*
 
 # Local Variables:
 # mode: sh
