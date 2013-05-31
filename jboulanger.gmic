@@ -162,7 +162,7 @@ thres={@{0,ia}+$3*sqrt(@{0,iv})}
 
 #@gmic detect_spots : _scale,_threshold
 #@gmic : Detect spots in the image
-#@gmic : $ 100,100 -noise .2,2 -blur 1 -n 0,255 -noise 5 -detect_spots , -pointscoordinates[-1] -resize[0] 100%,100%,1,3,1 -circles 5,.5,128,128,32 -k[0]
+#@gmic : $ 100,100 -noise .2,2 -blur 1 -n 0,255 -noise 5 --detect_spots , -pointscoordinates[-1] -resize[0] 100%,100%,1,3,1 -circles 5,.5,128,128,32 -k[0]
 detect_spots : -skip ${1=1},${2=4}
 -e[^-1] "detect events with scale $1 and threshold $2"
 -v - -repeat @# -l[$>]
@@ -337,34 +337,6 @@ beads2psf : -skip ${1=5}
 -sqr
 -endl -done -v +
 
-#@gmic deblur_richardsonlucy : _sigma>0, _nb_iter>0, _blur
-#@gmic : Deblur an image using Richardson-Lucy algorithm.
-#@gmic : Default values  '_nb_iter=50, _blur=1 (Gaussian)'
-#@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
-deblur_richardsonlucy : -check "$1>=0 && ${2=50}>=0 && ${3=1}>=0"
--e[^-1] "Deblur an image using Richardson-Lucy algorithm with sigma $1 and $2 iterations."
--v - -repeat @# -l[$>]
-  [0]
-  -repeat $2
-    --blur[-1] $1,1,$3 --/[0,-1] -rm[-2] -blur[-1] $1,1,$3 -*[-1,-2] # u *= H ( f / Hu )
-  -done
-  -rm[0]
--endl -done -v +
-
-#@gmic deblur_goldmeinel : _sigma>0, _nb_iter>0, _acceleration, _blur
-#@gmic : Deblur an image using Gold Meinel algorithm
-#@gmic : Default values '_nb_iter=8, _acceleration=1, _blur=1'
-#@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
-deblur_goldmeinel : -check "$1>=0 && ${2=8}>0 && ${3=1} && ${4=1}>=0"
--e[^-1] "Deblur an image using Gold-Meinel algorithm with sigma $1 and $2 iterations and acceleration $3."
--v - -repeat @# -l[$>]
-  [0]
-  -repeat $2
-    --blur[-1] $1,1,$4 --/[0,-1] -rm[-2] -pow[-1] $3 -*[-1,-2] # u *= f / Hu
-  -done
-  -rm[0]
--endl -done -v +
-
 #@gmic spotify : _scale>0,_nb_iter>0,
 #@gmic : Make everything look like a spot
 #@gmic : Default values '_nb_iter=1, _scale=1'
@@ -449,8 +421,8 @@ vobs : -check "${1=1}>0 && ${2=3}>0"
 
 #@gmic display_vobs :
 #@gmic : Display local diffusion coefficient
-#@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
-display_vobs :
+#@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_vobs
+-display_vobs :
 --vobs 1 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
 -resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
 -l[0] -s z -frame 5,12,64 -shift 0,5,0,0,2 -text "Original sequence",5,0,13,1,255 -a z -endl
@@ -607,7 +579,7 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
 #@gmic periodic_dots : _nb_angles,_scale,_start_angle
 #@gmic : Generate a peridic dot pattern with 'nb angles', 'scale' and 'start angle'.
 #@gmic : Default values 'nb angle=6', 'scale=4' and 'start_angle=0'
-#@gmic : $ 64,64 -dots 3,6,.1 -repeat 34 -i [0]  -done   -append_tiles
+#@gmic : $ 64,64 -periodic_dots 3,6,.1 -repeat 34 -i [0]  -done   -append_tiles
 periodic_dots : -skip ${1=6},${2=4},${3=.5}
 -e[^-1] "Generate a periodic dot pattern with "$1" angles, scale "$2", and orientation "$3"."
 -v - -repeat @# -l[$>]
@@ -627,7 +599,7 @@ periodic_dots : -skip ${1=6},${2=4},${3=.5}
 
 #@gmic frational_brownian_motion : _amplitude,_hurst_index,_epsilon
 #@gmic : Generate fractional brownian motion nd signal
-#@gmic : $ 400,300 -fractal_noise
+#@gmic : $ 400,300 -frational_brownian_motion
 frational_brownian_motion : -skip ${1=10%},${2=.5},${3=1}
 -v - -repeat @# -l[$>]
 -noise $1
@@ -639,8 +611,8 @@ frational_brownian_motion : -skip ${1=10%},${2=.5},${3=1}
 
 #@gmic clouds : _density_of_blue_sky,_amplitude,_fractal_dimension,_epsilon
 #@gmic : Generate clouds on the image
-#@gmic : $ 400,300 --cloud 50%
-clouds : -skip ${1=50%},${2=.5},${3=2},${4=1}
+#@gmic : $ 64,64 -repeat 3 --clouds {10+20*$>}% -done -rm[0]
+clouds : -skip ${1=50%},${2=1},${3=.5},${4=1}
 -v - -repeat @# -l[$>]
 -channels 0 -f 0
 -frational_brownian_motion $2,$3,$4 -negative -min $1 -negative -resize 100%,100%,1,4
@@ -649,7 +621,7 @@ clouds : -skip ${1=50%},${2=.5},${3=2},${4=1}
 
 #@gmic clearbluesky:
 #@gmic : Generate a Clear Blue Sky
-#@gmic : $ 400,300,1,3 -clearbluesky --cloud 50% -blend alpha
+#@gmic : $ 400,300,1,3 -clearbluesky --clouds 50% -blend alpha
 clearbluesky :
 -v - -repeat @# -l[$>]
 1,2,1,3 -f[-1] '63,70,120,144,190,215' -resize[-1] [0],5 -k[-1]
@@ -675,34 +647,6 @@ jeje_whiten_frequency :
 jeje_whiten_frequency_preview :
   -gimp_split_preview "-jeje_whiten_frequency $*",$-1
 
-#@gimp Sharpen [Richardson-Lucy] : jeje_deblur_richardsonlucy, jeje_deblur_richardsonlucy_preview
-#@gimp : Sigma = float(1,0.5,10)
-#@gimp : Iterations = int(10,1,100)
-#@gimp : Blur = choice(1,"Exponential","Gaussian")
-#@gimp : Cut = bool(true)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
-jeje_deblur_richardsonlucy:
-  -deblur_richardsonlucy $*
-  -if $4 -c 0,255 -else -n 0,255 -endif
-
-jeje_deblur_richardsonlucy_preview:
-  -gimp_split_preview "-jeje_deblur_richardsonlucy $*",$-1
-
-#@gimp Sharpen [Gold-Meinel] : jeje_deblur_goldmeinel, jeje_deblur_goldmeinel_preview
-#@gimp : Sigma = float(1,0.5,10)
-#@gimp : Iterations = int(5,1,15)
-#@gimp : Acceleration = float(1,1,3)
-#@gimp : Blur = choice(1,"Exponential","Gaussian")
-#@gimp : Cut = bool(true)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
-jeje_deblur_goldmeinel:
-  -deblur_goldmeinel $*
-  -if $5 -c 0,255 -else -n 0,255 -endif
-
-jeje_deblur_goldmeinel_preview:
-  -gimp_split_preview "-jeje_deblur_goldmeinel $*",$-1
 
 #@gimp Denoise [Block PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
 #@gimp : Patch = choice(1,4,8,16,32)
