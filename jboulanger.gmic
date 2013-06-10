@@ -272,7 +272,9 @@ fftshift :
 whiten_frequency : -check "${1=.25}>=0"
 -e[^-1] "Whiten the frequency with parameter "$1
 -v - -repeat @# -l[$>]
--fft --a c -norm[-1] -pow[-1] $1 -max[-1] 1e-12 -/[0-1] [2] -rm[2] -ifft -k[0]
+#E=@{0,sqrt(iv)}
+-fft --a c -norm[-1] -pow[-1] $1 -max[-1] 1e-12 -/[-1] {ia} -/[0-1] [2] -rm[2] -ifft -k[0]
+#-* {$E/sqrt(iv)}
 -endl -done -v +
 
 #@gmic periodize
@@ -679,13 +681,13 @@ clearbluesky :
 #@gimp : Cut = bool(false)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note(<b>Note:</b>This filter equalizes frequencies in the image.)
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/06/01</i>.</small>")
 jeje_whiten_frequency :
   -whiten_frequency {exp($1/100)-1}
-  -if $2 -c 0,255 -else -n 0,255 -endif
+  -if $2 -c 0,255 -n 0,255 -else -n 0,255 -endif
 
 jeje_whiten_frequency_preview :
-  -gimp_split_preview "-jeje_whiten_frequency $*",$-1
+  -gimp_split_preview "-jeje_whiten_frequency $1,$2",$-1
 
 #@gimp Sharpen [Richardson-Lucy] : jeje_deblur_richardsonlucy, jeje_deblur_richardsonlucy_preview
 #@gimp : Sigma = float(1,0.5,10)
