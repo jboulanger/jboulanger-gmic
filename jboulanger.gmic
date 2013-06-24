@@ -844,7 +844,7 @@ jeje_strip_preview :
 #@gimp : Normalize = bool(true)
 #@gimp : FFT preview = bool(false)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/10</i>.</small>")
 jeje_unstrip :
   -unstrip $1,$2
   -if $4 -tape -powerspectrum -else
@@ -853,6 +853,21 @@ jeje_unstrip :
 
 jeje_unstrip_preview :
   -gimp_split_preview "-jeje_unstrip $1,$2,$3,$4",$-1
+
+#@gimp Local normalization : jeje_local_normalize, jeje_local_normalize_preview
+#@gimp : Smoothness = float(5,0,20)
+#@gimp : repeat = int (1,1,4)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+jeje_local_normalize :
+  -repeat $2
+   --l[0] --blur $1 -- -sqr -blur $1 -sqrt -endl
+   --blur[0] $1 ---[0,-1] -+[0,-1] -k[0]
+  -done
+  -c 0,255
+
+jeje_local_normalize_preview :
+  -gimp_split_preview "-jeje_local_normalize $*",$-1
 
 
 # Local Variables:
