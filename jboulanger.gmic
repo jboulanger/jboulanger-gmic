@@ -869,6 +869,15 @@ jeje_local_normalize :
 jeje_local_normalize_preview :
   -gimp_split_preview "-jeje_local_normalize $*",$-1
 
+#@gimp Local Wiener : jeje_localwiener, jeje_localwiener_preview
+#@gimp : Scale = float(2,.5,10)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+jeje_localwiener :
+-localwiener $1
+
+jeje_localwiener_preview:
+-gimp_split_preview "-jeje_localwiener $1",$-1
 
 # Local Variables:
 # mode: sh
