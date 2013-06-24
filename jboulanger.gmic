@@ -277,6 +277,28 @@ whiten_frequency : -check "${1=.25}>=0"
 #-* {$E/sqrt(iv)}
 -endl -done -v +
 
+#@gmic localvariance : _radius
+#@gmic : Local variance filter
+#@gmic : $ image.jpg  -localvariance
+localvariance:
+-e[^-1] "Local Variance filter"
+-v - -repeat @# -l[$>]
+--blur $1,1,1 -- -sqr -blur $1,1,1 -sqrt
+-endl -done -v +
+
+#@gmic localwiener : _radius
+#@gmic : Local Wiener filtering X = <X> + (<X'X> - <N'N>)/<X'X> (X-<X>)
+#@gmic : $ image.jpg -noise 10 -localwiener
+localwiener : -skip ${1=2}
+-e[^-1] "Local Wiener filtering"
+-v - -repeat @# -l[$>]
+sigma=@{-noise_std}
+--blur $1,1,1 # mean
+--localvariance[0] $1 ---[-1] $sigma -reverse[-1,-2] -/[-1,-2] # variance
+---[0,1] # img-mean
+-*[-1,-2] -+[-1,-2] -k[-1]
+-endl -done -v +
+
 #@gmic periodize
 #@gmic : Periodization of the image
 #@gmic : $ image.jpg -periodize
@@ -330,15 +352,15 @@ fouriercut : -skip ${1=1}
 -fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft -k[0]
 -endl -done -v +
 
-#@gmic unstrip : _smoothness
+#@gmic unstrip : _smoothness,_scale
 #@gmic : Remove stripes in an image
-#@gmic : $ image.jpg -f 'i*(1+.2*sin(x))' --unstrip
-unstrip : -skip ${1=25}
+#@gmic : $ image.jpg -f '.5*i*(1+.25*sin(x))' --unstrip
+unstrip : -skip ${1=25},${2=20}
 -e[^-1] "Remove stripes"
 -v - -repeat @# -l[$>]
 # create a mask
---tape -l[-1] -powerspectrum -norm -detect_spots , -dilate_circ 20 -n 0,1
--negative -circle 50%,50%,2%,1,1 -blur $1 -n 0,1 -fftshift -if {iM==0} -f 1 -endif -endl
+--tape -l[-1] -powerspectrum -norm -detect_spots , -dilate_circ $2 -gt 0 -n 0,1
+-negative -circle 50%,50%,$2,1,1 -blur $1 -n 0,1 -fftshift -if {iM==0} -f 1 -endif -endl
 #apply the mask
 -fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft -k[0]
 -endl -done -v +
@@ -818,18 +840,19 @@ jeje_strip_preview :
 
 #@gimp Unstrip : jeje_unstrip, jeje_unstrip_preview
 #@gimp : Smoothness = float(1,0,10)
+#@gimp : Size = float(20,1,50)
 #@gimp : Normalize = bool(true)
 #@gimp : FFT preview = bool(false)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
 jeje_unstrip :
-  -unstrip $1%
-  -if $3 -tape -powerspectrum -else
-  -if -$2 -n 0,255 -else -c 0,255 -endif
+  -unstrip $1,$2
+  -if $4 -tape -powerspectrum -else
+  -if -$3 -n 0,255 -else -c 0,255 -endif
   -endif
 
 jeje_unstrip_preview :
-  -gimp_split_preview "-jeje_unstrip $1,$2,$3",$-1
+  -gimp_split_preview "-jeje_unstrip $1,$2,$3,$4",$-1
 
 
 # Local Variables:
