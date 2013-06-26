@@ -280,10 +280,10 @@ whiten_frequency : -check "${1=.25}>=0"
 #@gmic localvariance : _radius
 #@gmic : Local variance filter
 #@gmic : $ image.jpg  -localvariance
-localvariance:
+localvariance: -skip ${1=2}
 -e[^-1] "Local Variance filter"
 -v - -repeat @# -l[$>]
---blur $1,1,1 -- -sqr -blur $1,1,1 -sqrt
+--blur $1,1,1 -- -sqr -blur $1,1,1
 -endl -done -v +
 
 #@gmic localwiener : _radius
@@ -294,7 +294,7 @@ localwiener : -skip ${1=2}
 -v - -repeat @# -l[$>]
 sigma=@{-noise_std}
 --blur $1,1,1 # mean
---localvariance[0] $1 ---[-1] $sigma -reverse[-1,-2] -/[-1,-2] # variance
+--localvariance[0] $1 ---[-1] {$sigma*$sigma} -reverse[-1,-2] -/[-1,-2] # variance
 ---[0,1] # img-mean
 -*[-1,-2] -+[-1,-2] -k[-1]
 -endl -done -v +
@@ -856,13 +856,15 @@ jeje_unstrip_preview :
 
 #@gimp Local normalization : jeje_local_normalize, jeje_local_normalize_preview
 #@gimp : Smoothness = float(5,0,20)
+#@gimp : Amplitude = float(50,0,100)
+#@gimp : Threshold = float(5,0,100)
 #@gimp : repeat = int (1,1,4)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
 jeje_local_normalize :
-  -repeat $2
-   --l[0] --blur $1 -- -sqr -blur $1 -sqrt -endl
-   --blur[0] $1 ---[0,-1] -+[0,-1] -k[0]
+  -repeat $4
+   --localvariance $1 -sqrt[-1] -max[-1] $3 # compute local standard deviation
+   --blur[0] $1,1,1 ---[0,-1] -/[-1] [1] -*[-1] $2 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
   -done
   -c 0,255
 
@@ -874,7 +876,7 @@ jeje_local_normalize_preview :
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
 jeje_localwiener :
--localwiener $1
+-localwiener $1 -c 0,255
 
 jeje_localwiener_preview:
 -gimp_split_preview "-jeje_localwiener $1",$-1
