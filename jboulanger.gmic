@@ -732,36 +732,6 @@ jeje_whiten_frequency :
 jeje_whiten_frequency_preview :
   -gimp_split_preview "-jeje_whiten_frequency $1,$2",$-1
 
-#@gimp Sharpen [Richardson-Lucy] : jeje_deblur_richardsonlucy, jeje_deblur_richardsonlucy_preview
-#@gimp : Sigma = float(1,0.5,10)
-#@gimp : Iterations = int(10,1,100)
-#@gimp : Blur = choice(1,"Exponential","Gaussian")
-#@gimp : Cut = bool(true)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
-jeje_deblur_richardsonlucy:
-  -deblur_richardsonlucy $*
-  -if $4 -c 0,255 -else -n 0,255 -endif
-
-jeje_deblur_richardsonlucy_preview:
-  -gimp_split_preview "-jeje_deblur_richardsonlucy $*",$-1
-
-#@gimp Sharpen [Gold-Meinel] : jeje_deblur_goldmeinel, jeje_deblur_goldmeinel_preview
-#@gimp : Sigma = float(1,0.5,10)
-#@gimp : Iterations = int(5,1,15)
-#@gimp : Acceleration = float(1,1,3)
-#@gimp : Blur = choice(1,"Exponential","Gaussian")
-#@gimp : Cut = bool(true)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2013/03/29</i>.</small>")
-jeje_deblur_goldmeinel:
-  -deblur_goldmeinel $*
-  -if $5 -c 0,255 -else -n 0,255 -endif
-
-jeje_deblur_goldmeinel_preview:
-  -gimp_split_preview "-jeje_deblur_goldmeinel $*",$-1
-
-
 #@gimp _<b>Repair</b>
 #@gimp Denoise [Block PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
 #@gimp : Patch = choice(1,4,8,16,32)
