@@ -287,7 +287,8 @@ localvariance: -skip ${1=2}
 -endl -done -v +
 
 #@gmic localwiener : _radius
-#@gmic : Local Wiener filtering X = <X> + (<X'X> - <N'N>)/<X'X> (X-<X>)
+#@gmic : Local Wiener filtering
+#@gmic : X = <X> + ((<X-<X>>)'(<X-<X>>) - <N'N>)/(<X-<X>>)'(<X-<X>>) (X-<X>)
 #@gmic : $ image.jpg -noise 10 -localwiener
 localwiener : -skip ${1=2}
 -e[^-1] "Local Wiener filtering"
@@ -495,6 +496,26 @@ display_vobs :
 -text "Vobs ["$A":"$B"]",5,0,13,1,255 -endl -done -a z -endl
 -a x
 
+display_pseudocolor : -skip ${1=6}
+ A={round(@{-1,im},0.0001)} B={round(@{-1,iM},0.0001)} -n[-1] 0,255 -map[-1] 5
+-resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
+1,100% -f[-1] 'h-y' -n 0,255  -map[-1] 5 -resize[-1] 5,@{0,h},1,3,5 -frame[-1] 3,0,64  -resize[-1] 100%,@{0,h},1,3,5 -a x
+30,100%,1,3,64 -l[-1] -repeat $1 val={round($A+$>/($1-1)*($B-$A),.001)} -text $val,0,{max(0,h-$>*h/($1-1)-13)},13,1,255 -done -endl -a x
+
+#@gmic display_colordepth : _dz
+display_colordepth :
+H={d*$1} -colordepth , -display_colorbar 0,$H,6
+
+#@gmic display_colorbar : _min,_max,_ntics
+display_colorbar : -skip ${3=6}
+#-n[-1] 0,255 -map[-1] 5
+-resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
+1,100% -f[-1] 'h-y' -n 0,255  -map[-1] 5 -resize[-1] 5,@{0,h},1,3,5 -frame[-1] 3,0,64  -resize[-1] 100%,@{0,h},1,3,5 -a x
+30,100%,1,3,64 -l[-1] -repeat $3 val={round($1+$>/($3-1)*($2-$1),.001)} -text $val,0,{max(0,h-$>*h/($3-1)-13)},13,1,255 -done -endl -a x
+
+
+
+
 #@gmic local_diffusion_coefficient : _scale,_threshold
 #@gmic : Estimate local diffusion coefficient It - D (Ixx+Iyy)=0 using D=It/(Ixx+Iyy)
 #@gmic : $ 100,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -local_diffusion_coefficient 2,.5
@@ -696,7 +717,7 @@ clearbluesky :
 #@gmic ::  GIMP
 #
 #---------------------------------
-#@gimp _<b>Enhancement</b>
+#@gimp _<b>Details</b>
 
 #@gimp Sharpen [Whiten] : jeje_whiten_frequency, jeje_whiten_frequency_preview
 #@gimp : Alpha = float(50,0,100)
@@ -740,6 +761,8 @@ jeje_deblur_goldmeinel:
 jeje_deblur_goldmeinel_preview:
   -gimp_split_preview "-jeje_deblur_goldmeinel $*",$-1
 
+
+#@gimp _<b>Repair</b>
 #@gimp Denoise [Block PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
 #@gimp : Patch = choice(1,4,8,16,32)
 #@gimp : Cycles = int(8,1,32)
