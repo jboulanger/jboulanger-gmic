@@ -924,7 +924,7 @@ scale={3*$3/min(w,h)*100}
 100%,100%
 -f[-1] '(1-exp(-.5*(cos($theta)*(x-w/2)+sin($theta)*(y-h/2)+$2*max(w,h)/100)^2/($scale*$scale)))'
 -reverse -repeat $4 --blur[-1] 1  -done  -a[1--1] z
--l[0] -tones {$4+1} -blur 1 -a z  -endl -d
+-l[0] -tones {$4+1} -blur 1 -a z  -endl
 -reverse -*  -s z -+ -n 0,255
 
 jeje_tilt_shift_preview:
