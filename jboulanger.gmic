@@ -943,7 +943,7 @@ jeje_tilt_shift_preview:
 #@gimp : Y center = float(50,0,100)
 #@gimp : frequency = float(10,0,100)
 #@gimp : angle = float(0,0,360)
-#@gimp : threshold = float(0.5,0,1)
+#@gimp : threshold = float(0.25,0,1)
 #@gimp : threshold = float(0.5,0,1)
 #@gimp : Color = color(255,0,0)
 #@gimp : Color = color(255,255,0)
@@ -957,8 +957,6 @@ jeje_rays :
 
 jeje_rays_preview:
 -gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12",$-1
-
-
 
 
 # Local Variables:
