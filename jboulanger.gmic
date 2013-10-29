@@ -357,14 +357,14 @@ fouriercut : -skip ${1=1}
 -fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft -k[0]
 -endl -done -v +
 
-#@gmic unstrip : _smoothness,_scale
+#@gmic unstrip : _smoothness,_scale,_threshold
 #@gmic : Remove stripes in an image
 #@gmic : $ image.jpg -f '.5*i*(1+.25*sin(x))' --unstrip
-unstrip : -skip ${1=25},${2=20}
+unstrip : -skip ${1=25},${2=20},${3=4}
 -e[^-1] "Remove stripes"
 -v - -repeat @# -l[$>]
 # create a mask
---tape -l[-1] -powerspectrum -norm -detect_spots , -dilate_circ $2 -gt 0 -n 0,1
+--tape -l[-1] -powerspectrum -norm -detect_spots 1,$3 -dilate_circ $2 -gt 0 -n 0,1
 -negative -circle 50%,50%,$2,1,1 -blur $1 -n 0,1 -fftshift -if {iM==0} -f 1 -endif -endl
 #apply the mask
 -fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft -k[0]
@@ -789,6 +789,33 @@ jeje_denoise_patch_dict:
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
+#@gimp Local Wiener : jeje_localwiener, jeje_localwiener_preview
+#@gimp : Scale = float(2,.5,10)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+jeje_localwiener :
+-localwiener $1 -c 0,255
+
+jeje_localwiener_preview:
+-gimp_split_preview "-jeje_localwiener $1",$-1
+
+#@gimp Unstrip : jeje_unstrip, jeje_unstrip_preview
+#@gimp : Smoothness = float(1,0,10)
+#@gimp : Size = float(20,1,50)
+#@gimp : Sensitivity = float(4,1,10)
+#@gimp : Normalize = bool(true)
+#@gimp : FFT preview = bool(false)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/10</i>.</small>")
+jeje_unstrip :
+  -unstrip $1,$2,$3
+  -if $5 -tape -powerspectrum -else
+  -if -$4 -n 0,255 -else -c 0,255 -endif
+  -endif
+
+jeje_unstrip_preview :
+  -gimp_split_preview "-jeje_unstrip $1,$2,$3,$4,$5",$-1
+
 #@gimp _<b>Patterns</b>
 #@gimp Periodic dots: jeje_periodic_dots, jeje_periodic_dots_preview
 #@gimp : Number = int(6,2,32)
@@ -819,6 +846,84 @@ jeje_clouds :
 
 jeje_clouds_preview :
  -jeje_clouds $1,$2
+
+#@gimp Strip : jeje_strip, jeje_strip_preview
+#@gimp : Angle = float(45,0,90)
+#@gimp : Frequency = float(50,0,100)
+#@gimp : Phase =  float(0,0,180)
+#@gimp : Amplitude = float(1,0,2)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+jeje_strip :
+  theta={pi*$1/180}
+  -f '0.5*i*(1+$4*sin(2*pi*$2*(cos($theta)*x/w+sin($theta)*y/h)+2*pi*$3/180))'
+  -c 0,255
+
+jeje_strip_preview :
+  -gimp_split_preview "-jeje_strip $*",$-1
+
+#@gimp Rays : jeje_rays, jeje_rays_preview
+#@gimp : X center = float(50,0,100)
+#@gimp : Y center = float(50,0,100)
+#@gimp : frequency = float(10,0,100)
+#@gimp : angle = float(0,0,360)
+#@gimp : threshold = float(0.25,0,1)
+#@gimp : threshold = float(0.5,0,1)
+#@gimp : Color = color(255,0,0)
+#@gimp : Color = color(255,255,0)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/10/29</i>.</small>")
+jeje_rays :
+-s c
+-l[0] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $7,$10 -endl
+-l[1] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $8,$11 -endl
+-l[2] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $9,$12 -endl
+-a c
+
+jeje_rays_preview:
+-gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12",$-1
+
+#@gimp _<b>Degradations</b>
+#@gimp Tilt Shift : jeje_tilt_shift, jeje_tilt_shift_preview
+#@gimp : Tilt = float(10,0,90)
+#@gimp : Shift = float(-10,-50,50)
+#@gimp : Size = float(75,1,100)
+#@gimp : Amount = int(3,2,30)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+jeje_tilt_shift:
+#--gradient_norm -blur[-1] $3% -reverse -repeat $1 --blur[-1] {$2/$1}  -done
+#-a[1--1] z
+#-l[0] -tones $1 -blur   $3% -reverse  -a z -resize 100%,100%,100%,3 -endl
+#-d -*  -s z -+ -n 0,255
+theta={pi*(90-$1)/180}
+scale={3*$3/min(w,h)*100}
+100%,100%
+-f[-1] '(1-exp(-.5*(cos($theta)*(x-w/2)+sin($theta)*(y-h/2)+$2*max(w,h)/100)^2/($scale*$scale)))'
+-reverse -repeat $4 --blur[-1] 1  -done  -a[1--1] z
+-l[0] -tones {$4+1} -blur 1 -a z  -endl
+-reverse -*  -s z -+
+
+jeje_tilt_shift_preview:
+-gimp_split_preview "-jeje_tilt_shift $1,$2,$3,$4",$-1
+
+#@gimp _<b>Details</b>
+#@gimp Local variance normalization : jeje_local_normalize, jeje_local_normalize_preview
+#@gimp : Smoothness = float(5,0,20)
+#@gimp : Amplitude = float(50,0,100)
+#@gimp : Threshold = float(5,0,100)
+#@gimp : repeat = int (1,1,4)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
+jeje_local_normalize :
+  -repeat $4
+   --localvariance $1 -sqrt[-1] -max[-1] $3 # compute local standard deviation
+   --blur[0] $1,1,1 ---[0,-1] -/[-1] [1] -*[-1] $2 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
+  -done
+  -c 0,255
+
+jeje_local_normalize_preview :
+  -gimp_split_preview "-jeje_local_normalize $*",$-1
 
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
@@ -855,108 +960,6 @@ jeje_render3d:
 jeje_render3d_preview:
     -jeje_render3d $*
 
-
-#@gimp Strip : jeje_strip, jeje_strip_preview
-#@gimp : Angle = float(45,0,90)
-#@gimp : Frequency = float(50,0,100)
-#@gimp : Phase =  float(0,0,180)
-#@gimp : Amplitude = float(1,0,2)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
-jeje_strip :
-  theta={pi*$1/180}
-  -f '0.5*i*(1+$4*sin(2*pi*$2*(cos($theta)*x/w+sin($theta)*y/h)+2*pi*$3/180))'
-  -c 0,255
-
-jeje_strip_preview :
-  -gimp_split_preview "-jeje_strip $*",$-1
-
-#@gimp Unstrip : jeje_unstrip, jeje_unstrip_preview
-#@gimp : Smoothness = float(1,0,10)
-#@gimp : Size = float(20,1,50)
-#@gimp : Normalize = bool(true)
-#@gimp : FFT preview = bool(false)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/10</i>.</small>")
-jeje_unstrip :
-  -unstrip $1,$2
-  -if $4 -tape -powerspectrum -else
-  -if -$3 -n 0,255 -else -c 0,255 -endif
-  -endif
-
-jeje_unstrip_preview :
-  -gimp_split_preview "-jeje_unstrip $1,$2,$3,$4",$-1
-
-#@gimp Local normalization : jeje_local_normalize, jeje_local_normalize_preview
-#@gimp : Smoothness = float(5,0,20)
-#@gimp : Amplitude = float(50,0,100)
-#@gimp : Threshold = float(5,0,100)
-#@gimp : repeat = int (1,1,4)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
-jeje_local_normalize :
-  -repeat $4
-   --localvariance $1 -sqrt[-1] -max[-1] $3 # compute local standard deviation
-   --blur[0] $1,1,1 ---[0,-1] -/[-1] [1] -*[-1] $2 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
-  -done
-  -c 0,255
-
-jeje_local_normalize_preview :
-  -gimp_split_preview "-jeje_local_normalize $*",$-1
-
-#@gimp Local Wiener : jeje_localwiener, jeje_localwiener_preview
-#@gimp : Scale = float(2,.5,10)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
-jeje_localwiener :
--localwiener $1 -c 0,255
-
-jeje_localwiener_preview:
--gimp_split_preview "-jeje_localwiener $1",$-1
-
-
-#@gimp Tilt Shift : jeje_tilt_shift, jeje_tilt_shift_preview
-#@gimp : Tilt = float(10,0,90)
-#@gimp : Shift = float(-10,-50,50)
-#@gimp : Size = float(75,1,100)
-#@gimp : Amount = int(3,2,30)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
-jeje_tilt_shift:
-#--gradient_norm -blur[-1] $3% -reverse -repeat $1 --blur[-1] {$2/$1}  -done
-#-a[1--1] z
-#-l[0] -tones $1 -blur   $3% -reverse  -a z -resize 100%,100%,100%,3 -endl
-#-d -*  -s z -+ -n 0,255
-theta={pi*(90-$1)/180}
-scale={3*$3/min(w,h)*100}
-100%,100%
--f[-1] '(1-exp(-.5*(cos($theta)*(x-w/2)+sin($theta)*(y-h/2)+$2*max(w,h)/100)^2/($scale*$scale)))'
--reverse -repeat $4 --blur[-1] 1  -done  -a[1--1] z
--l[0] -tones {$4+1} -blur 1 -a z  -endl
--reverse -*  -s z -+
-
-jeje_tilt_shift_preview:
--gimp_split_preview "-jeje_tilt_shift $1,$2,$3,$4",$-1
-
-#@gimp Rays : jeje_rays, jeje_rays_preview
-#@gimp : X center = float(50,0,100)
-#@gimp : Y center = float(50,0,100)
-#@gimp : frequency = float(10,0,100)
-#@gimp : angle = float(0,0,360)
-#@gimp : threshold = float(0.25,0,1)
-#@gimp : threshold = float(0.5,0,1)
-#@gimp : Color = color(255,0,0)
-#@gimp : Color = color(255,255,0)
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-jeje_rays :
--s c
--l[0] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $7,$10 -endl
--l[1] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $8,$11 -endl
--l[2] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $9,$12 -endl
--a c
-
-jeje_rays_preview:
--gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12",$-1
 
 
 # Local Variables:
