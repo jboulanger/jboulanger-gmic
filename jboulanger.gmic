@@ -865,23 +865,22 @@ jeje_strip_preview :
 #@gimp Rays : jeje_rays, jeje_rays_preview
 #@gimp : X center = float(50,0,100)
 #@gimp : Y center = float(50,0,100)
-#@gimp : frequency = float(10,0,100)
-#@gimp : angle = float(0,0,360)
-#@gimp : threshold = float(0.25,0,1)
-#@gimp : threshold = float(0.5,0,1)
-#@gimp : Color = color(255,0,0)
-#@gimp : Color = color(255,255,0)
+#@gimp : Frequency = float(10,0,100)
+#@gimp : Angle = float(0,0,360)
+#@gimp : Proportion = float(0.5,0,1)
+#@gimp : Color 1 = color(255,0,0)
+#@gimp : Color 2 = color(255,255,0)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/10/29</i>.</small>")
 jeje_rays :
 -s c
--l[0] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $7,$10 -endl
--l[1] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $8,$11 -endl
--l[2] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -c $5,$6 -n $9,$12 -endl
+-l[0] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -gt $5 -n $6,$9 -endl
+-l[1] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -gt $5 -n $7,$10 -endl
+-l[2] -rays {w*$1/100},{h*$2/100},$3,$4 -n 0,1 -gt $5 -n $8,$11 -endl
 -a c
 
 jeje_rays_preview:
--gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12",$-1
+-gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11",$-1
 
 #@gimp _<b>Degradations</b>
 #@gimp Tilt Shift : jeje_tilt_shift, jeje_tilt_shift_preview
@@ -912,7 +911,7 @@ jeje_tilt_shift_preview:
 #@gimp : Smoothness = float(5,0,20)
 #@gimp : Amplitude = float(50,0,100)
 #@gimp : Threshold = float(5,0,100)
-#@gimp : repeat = int (1,1,4)
+#@gimp : Repeat = int (1,1,4)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
 jeje_local_normalize :
@@ -932,9 +931,9 @@ jeje_local_normalize_preview :
 #@gimp : Size = int(8,4,16)
 #@gimp : Quality = int(6,2,16)
 #@gimp : Opacity = float(0.1,0,1)
-#@gimp : AngleX = float(240,0,360)
-#@gimp : AngleY = float(0,0,360)
-#@gimp : AngleZ = float(30,0,360)
+#@gimp : Angle X = float(240,0,360)
+#@gimp : Angle Y = float(0,0,360)
+#@gimp : Angle Z = float(30,0,360)
 #@gimp : Zoom = float(1,0,3)
 #@gimp : Top color = color(32,32,64,255)
 #@gimp : Bottom Color = color(64,128,96,255)
