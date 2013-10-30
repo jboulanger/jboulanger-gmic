@@ -930,8 +930,8 @@ jeje_normalize_local_variance :
   -apply_channels "-normalize_local_variance $1,$2,$3,$4",$5,0
   -c 0,255
 
-jeje_normalize_local_variance_preview
-  -gimp_split_preview "-jeje_normalize_local_variance $*",$-1
+jeje_normalize_local_variance_preview:
+  -gimp_split_preview "-jeje_normalize_local_variance $1,$2,$3,$4,$5",$-1
 
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
