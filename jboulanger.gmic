@@ -285,19 +285,21 @@ whiten_frequency : -check "${1=.25}>=0"
 #@gmic : Local variance filter
 #@gmic : $ image.jpg  -localvariance
 localvariance: -skip ${1=2}
--e[^-1] "Local Variance filter"
+-e[^-1] "Local Variance filter with scale "$1
 -v - -repeat @# -l[$>]
 --blur $1,1,1 -- -sqr -blur $1,1,1
 -endl -done -v +
 
-#@gmic normalize_loval_variance : _radius,_amplitude,_threshold,_repeat
-#@gmic : Local variance Normalization
+#@gmic normalize_local_variance : _amplitude,_radius,_threshold,_repeat
+#@gmic : Local variance normalization
 #@gmic : $ image.jpg  -localvariance
-normalize_loval_variance: -skip ${1=5},${2=50},${3=5},${4=1}
+normalize_local_variance: -skip ${1=50},${2=2},${3=25},${4=1}
+  -e[^-1] "Normalize local variance with amplitude $1, scale $2, threshold $3 (x$4 times)."
+  -v -
   -repeat $4
-   --localvariance $1 -sqrt[-1] -max[-1] $3 # compute local standard deviation
-   --blur[0] $1,1,1 ---[0,-1] -/[-1] [1] -*[-1] $2 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
-  -done
+   --localvariance $2 -sqrt[-1] -max[-1] $3 # compute local standard deviation
+   --blur[0] $2,1,1 ---[0,-1] -/[-1] [1] -*[-1] $1 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
+  -done -v +
 
 #@gmic localwiener : _radius
 #@gmic : Local Wiener filtering
@@ -916,20 +918,20 @@ jeje_tilt_shift_preview:
 -gimp_split_preview "-jeje_tilt_shift $1,$2,$3,$4",$-1
 
 #@gimp _<b>Details</b>
-#@gimp Local variance normalization : jeje_local_normalize, jeje_local_normalize_preview
-#@gimp : Smoothness = float(5,0,20)
+#@gimp Local variance normalization : jeje_normalize_local_variance, jeje_normalize_local_variance_preview
 #@gimp : Amplitude = float(50,0,100)
+#@gimp : Smoothness = float(5,0,20)
 #@gimp : Threshold = float(5,0,100)
 #@gimp : Repeat = int (1,1,4)
 #@gimp : Channel(s) = choice(3,"All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Alpha","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
-jeje_local_normalize :
-  -apply_channels "-normalize_local $1,$2,$3,$4",$5,0
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/10/30</i>.</small>")
+jeje_normalize_local_variance :
+  -apply_channels "-normalize_local_variance $1,$2,$3,$4",$5,0
   -c 0,255
 
-jeje_local_normalize_preview :
-  -gimp_split_preview "-jeje_local_normalize $*",$-1
+jeje_normalize_local_variance_preview
+  -gimp_split_preview "-jeje_normalize_local_variance $*",$-1
 
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
