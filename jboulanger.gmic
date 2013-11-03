@@ -357,7 +357,6 @@ fouriermix : -skip ${1=50%}
 -*[0,1] [-1] -negative[-1] -*[2,3] [-1] -rm[-1] -+[0,2] -+[1,2] -fftshift
 -ifft  -k[0]
 
-
 #@gmic fouriercut : _threshold
 #@gmic : Illustrate the thresholding of Fourier coefficients
 #@gmic : $ image.jpg -fouriercut
@@ -458,6 +457,15 @@ schizo : -skip ${1=100},${2=-50},${3=5},${4=.75}
  -endl
  -*[-1] $4  --*[0] {1-$4} -+[-1,-2]
 -done -rm[0]
+-endl -done -v +
+
+#@gmic scandoc : _smooth,_background,_black,_white
+#@gmic : improve scanned document
+#@gmic : image.jpg -scandoc
+scandoc: -skip ${1=3},${2=100},${3=10%},${4=90%}
+-v - -repeat @# -l[$>]
+-median $1 --blur $2 -- -min 0
+-s c -n 0,1 -a c -c $3,$4 -n 0,255
 -endl -done -v +
 
 #@gmic oblur: _nb_scales,_nb_angles
@@ -826,6 +834,20 @@ jeje_unstrip :
 
 jeje_unstrip_preview :
   -gimp_split_preview "-jeje_unstrip $1,$2,$3,$4,$5",$-1
+
+#@gimp Scan document: jeje_scandoc, jeje_scandoc_preview
+#@gimp : note = note(Use filter is useful to post process document you scan with a digital camera. It peforms smoothing, background correction and white balance adjustement)
+#@gimp : Smoothness = int(3,1,7)
+#@gimp : Background = float(1,10,100)
+#@gimp : White level = float(90,0,100)
+#@gimp : Black level = float(5,0,100)
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/11/03</i>.</small>")
+jeje_scandoc :
+  -scandoc $1,$2%,$3%,$4%
+
+jeje_scandoc_preview :
+  -gimp_split_preview "-jeje_scandoc $1,$2,$3,$4",$-1
 
 #@gimp _<b>Patterns</b>
 #@gimp Periodic dots: jeje_periodic_dots, jeje_periodic_dots_preview
