@@ -835,7 +835,7 @@ jeje_unstrip :
 jeje_unstrip_preview :
   -gimp_split_preview "-jeje_unstrip $1,$2,$3,$4,$5",$-1
 
-#@gimp Scan document: jeje_scandoc, jeje_scandoc_preview
+#@gimp Repair scanned document: jeje_scandoc, jeje_scandoc_preview
 #@gimp : note = note(Use filter is useful to post process document you scan with a digital camera. It peforms smoothing, background correction and white balance adjustement)
 #@gimp : Smoothness = int(3,1,7)
 #@gimp : Background = float(1,10,100)
