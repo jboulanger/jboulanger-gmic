@@ -283,6 +283,33 @@ whiten_frequency : -check "${1=.25}>=0"
 #-* {$E/sqrt(iv)}
 -endl -done -v +
 
+#@gmic deblur_goldmeinel2 : sigma>=0, _nb_iter>=0, _acceleration>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
+#@gmic : Deblur selected images using Gold-Meinel algorithm
+#@gmic : Default values: 'nb_iter=8', 'acceleration=1' and 'kernel_type=1'.
+#@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
+###### : (contribution from Jérôme Boulanger).
+deblur_goldmeinel2 : -check "$1>=0 && ${2=8}>=0 && ${3=1}>=0" -skip ${4=1} -skip ${5=1}
+  -e[^-1] "Deblur image$? using Gold-Meinel algorithm, with sigma $1, $2 iterations, acceleration $3 and "@{-arg\ 1+!$4,"",quasi-}"gaussian kernel."
+  -v - -repeat @# -l[$>]
+    [0] -r[-1] 200%,200%,200%,100%,5 -repeat $2
+      --b[-1] $1,1,$4 -r[-1] 50%,50%,50% --/[0,-1] -rm[-2] -^[-1] $3 -r[-1] 200%,200%,200%,100%,5 -*[-1,-2] # u *= f / Hu
+
+    -done -rm[0]
+  -endl -done -v +
+
+#@gmic deblur_richardsonlucy2 : sigma>=0, nb_iter>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
+#@gmic : Deblur selected images using Richardson-Lucy algorithm.
+#@gmic : Default values: 'nb_iter=50' and 'kernel_type=1'.
+#@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
+###### : (contribution from Jérôme Boulanger).
+deblur_richardsonlucy2 : -check "$1>=0 && ${2=50}>=0" -skip ${3=1} -skip ${4=1}
+  -e[^-1] "Deblur image$? using Richardson-Lucy algorithm, with sigma $1, $2 iterations and "@{-arg\ 1+!$3,"",quasi-}"gaussian kernel."
+  -v - -repeat @# -l[$>]
+    [0] -r[-1] 200%,200%,200% -repeat $2
+      --b[-1] $1,1,{$3!=0} -r[-1] 50%,50%,50% --/[0,-1] -rm[-2] -r[-1] 200%,200%,200% -b[-1] $1,1,{$3!=0}  -*[-1,-2] # u *= H ( f / Hu )
+    -done -rm[0]
+  -endl -done -v +
+
 #@gmic localvariance : _radius
 #@gmic : Local variance filter
 #@gmic : $ image.jpg  -localvariance
@@ -675,25 +702,52 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
 -endl -done -v +
 
 
-#@gmic iuwt: _levels,_scale
-#@gmic : compute a pseudo "isotropic undecimated wavelet transform"
-#@gmic : related to the laplacian pyramid of Burt and Adelson
-#@gmic : you can compute the inverse using a sum of all coefficients
+#@gmic iuwt: _nlevels>2,_spline>1
+#@gmic : compute the "isotropic undecimated wavelet transform" using
+#@gmic : a trou algorithm for the B3-Spline wavelet.
+#@gmic : The inverse is obtained as the sum of all coefficients
 #@gmic : $ image.jpg -wavelet 4,1 -n 0,255 -append_tiles
 #@gmic : $ image.jpg -wavelet 3,1 -+
-iuwt: -skip ${1=3},${2=1} -check $1>1
-  -v - -repeat @# -l[$>]  scale=$2
-   -repeat {$1-1} scale={2*$scale}
-     -l[-1] --blur $scale --- -reverse[-1,-2] -rm[0] -endl
+iuwt: -skip ${1=3},${2=3} #-check {$1>1},{$2>1}
+  -e[^-1] "Compute isotropic undecimated wavelet transform"
+  -v - -repeat @# -l[$>]
+  # Compute the Spline filter by succesive convolutions
+  50
+  -l[-1]
+    -f 'if(x==w/2|x==w/2-1,1,0)' -i [0]
+    -repeat $2 -convolve[-1] [0] -done
+    -k[-1] -autocrop 0 -/ {ia*w}
+  -endl
+  # Compute the decomposition
+   -repeat {$1-1}
+     -l[-1,-2]
+      --convolve[0] [1]
+      -y[1] y -convolve[-1] [1]
+      ---[0] [-1] -rm[0] -reverse
+     -endl
+     # add trou for the next scale
+     -l[-1] -y y 100% -a x -s y -s x -rm[-1] -a x -endl
     -done
+    -rm[-1] -reverse
   -endl -done -v +
 
-#@gmic denoise_iuwt:_levels,_scale,_threshold
-#@gmic : denosing based on a pseudo "isotropic undecimated wavelet transform"
+#@gmic denoise_iuwt:_thresold,_lambda,_nlevels>2,_spline>1
+#@gmic : denoising by iterative thresholding "isotropic undecimated wavelet transform"
+#@gmic : u_{n+1} = u_n + lambda T(W u_n)
 #@gmic : $ image.jpg --noise 10 --denoise_iuwt[-1] , -print_psnr
-denoise_iuwt: -skip ${1=3},${2=.75},${3=3}
+denoise_iuwt: -skip ,${1=1.4},${2=10},${3=10},${4=3},${5=3}
+  -e[^-1] "Denoise using the isotropic undecimated wavelet transform"
   -v - -repeat @# -l[$>]
-    -iuwt $1,$2 sigma=@{-mad[0]} -threshold[0--2] {$3*$sigma},1 -+
+    -repeat $2 --l[-1] -iuwt $4,$5 -threshold[1--1] $1,1 -+ -endl -*[-1] $3 -+ -/ {1+$3} -done
+  -endl -done  -v +
+
+#@gmic denoise_iuwt_wiener:_scale,_nlevels>2,_spline>1
+#@gmic : denoising by thresholding "isotropic undecimated wavelet transform"
+#@gmic : $ image.jpg --noise 10 --denoise_iuwt[-1] , -print_psnr
+denoise_iuwt_wiener: -skip ,${1=1.5},${2=2},${3=1}
+  -e[^-1] "Denoise using the isotropic undecimated wavelet transform"
+  -v - -repeat @# -l[$>]
+     -iuwt $2,$3 -localwiener[1--1] $1 -+
   -endl -done  -v +
 
 #---------------------------------
@@ -757,6 +811,9 @@ segment_cells: -skip ${1=5},${2=10%}
 #
 #---------------------------------
 
+_challenge:
+108,86,1,3 -l[-1] -fractional_brownian_motion .25  -n 0,128 --norm -gt[-1] 60% -* -resize 1080,860,1,3,1  --l[-1] -blur 10 -shift[-1] 10,10 -endl -max -crop 10,10,100%,100% -negative -endl -n 0,255
+
 #@gmic periodic_dots : _nb_angles,_scale,_start_angle
 #@gmic : Generate a peridic dot pattern with 'nb angles', 'scale' and 'start angle'.
 #@gmic : Default values 'nb angle=6', 'scale=4' and 'start_angle=0'
@@ -794,7 +851,11 @@ fractional_brownian_motion : -skip ${1=.5},${2=1} -check "$1>=0&&$1<=1" -check "
 -v - -repeat @# -l[$>]
 -f 0 -noise 1
 -fft -fftshift
+-if {@{0,d}==1}
 -f 'rx=x-w/2;ry=y-h/2;i*($2+sqrt(rx*rx+ry*ry))^(-2*$1-1)'
+-else
+-f 'rx=x-w/2;ry=y-h/2;rz=z-d/2;i*($2+sqrt(rx*rx+ry*ry+rz*rz))^(-2*$1-1)'
+-endif
 -fftshift -ifft
 -k[0]
 -endl -done -v +
@@ -816,6 +877,50 @@ clearbluesky :
 -v - -repeat @# -l[$>]
 1,2,1,3 -f[-1] '63,70,120,144,190,215' -resize[-1] [0],5 -k[-1]
 -endl -done -v +
+
+#---------------------------------
+#
+#@gmic ::  Colors
+#
+#---------------------------------
+#@gmic wavelength_color: _wavelength
+#@gmic : Convert a wavelength [380,780] to RGB color
+#@gmic : from http://scienceprimer.com
+#@gmic : $ image.jpg -luminance -wavelength_color 504
+wavelength_color:
+-v -
+-if {$1>=380&$1<440}
+  R={-1*($1-440)/(440-380)}
+  G=0
+  B=1
+-elif {$1>=440&$1<490}
+  R=0
+  G={($1-440)/(490-440)}
+  B=1
+-elif {$1>=490&$1<510}
+  R=0
+  G=1
+  B={-1*($1-510)/(510-490)}
+-elif {$1>=510&$1<580}
+  R={($1-510)/(580-510)}
+  G=1
+  B=0
+-elif {$1>=580&$1<645}
+  R=1
+  G={-1*($1-645)/(645-580)}
+  B=0
+-elif {$1>=645&$1<780}
+  R=1
+  G=0
+  B=0
+-else
+  R=0
+  G=0
+  B=0
+-endif
+-repeat @# -l[$>]
+-mix_channels ($R;$G;$B)
+-endl -done
 
 #---------------------------------
 #
@@ -865,17 +970,19 @@ jeje_localwiener_preview:
 -gimp_split_preview "-jeje_localwiener $1",$-1
 
 #@gimp Denoise IUWT : jeje_denoise_iuwt,jeje_denoise_iuwt_preview
-#@gimp : Number of scales = int(3,2,6)
-#@gimp : Scale = float(1,.1,3)
 #@gimp : Threshold = float(3,0,10)
+#@gimp : Iterations = int(1,1,10)
+#@gimp : Step = float(10,1,20)
+#@gimp : Number of scales = int(3,2,6)
+#@gimp : Wavelet = choice("Spline B1","Spline B2","Spline B3","Spline B4","Spline B5","Spline B6")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small><b>Note:</b> Compute a pseudo wavelet transform by applying successivly 'Number of scales' times a blur of parameter 'Scale' and thresholding the successives differences by a soft-threshold equal to 'Threshold' times the estimated noise standard deviation from the first wavelet level.'</small>")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/12/12</i>.</small>")
 jeje_denoise_iuwt :
--denoise_iuwt $1,$2,$3
+-denoise_iuwt $1,$2,$3,$4,{$5+1}
 
 jeje_denoise_iuwt_preview:
--gimp_split_preview "-jeje_denoise_iuwt $1,$2,$3",$-1
+-gimp_split_preview "-jeje_denoise_iuwt $1,$2,$3,$4,$5",$-1
 
 #@gimp Unstrip : jeje_unstrip, jeje_unstrip_preview
 #@gimp : Smoothness = float(1,0,10)
