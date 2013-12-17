@@ -710,7 +710,7 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
 #@gmic : $ image.jpg -wavelet 3,1 -+
 iuwt: -skip ${1=3},${2=3} #-check {$1>1},{$2>1}
   -e[^-1] "Compute isotropic undecimated wavelet transform"
-  -v - -repeat @# -l[$>]
+  -v - -repeat @# -l[$<]
   # Compute the Spline filter by succesive convolutions
   50
   -l[-1]
@@ -731,23 +731,29 @@ iuwt: -skip ${1=3},${2=3} #-check {$1>1},{$2>1}
     -rm[-1] -reverse
   -endl -done -v +
 
-#@gmic denoise_iuwt:_thresold,_lambda,_nlevels>2,_spline>1
+#@gmic iuwt_std : _nlevels>2,_spline>1
+#@gmic : Compute noise at each level of the iuwt
+#@gmic : $ gmic image.jpg -iuwt_std
+iuwt_std:
+ -v - -repeat @# -l[$>]
+ sigma=@{-noise_std}
+ -f 0 -noise $sigma -iuwt $1,$2 -repeat @# -l[$>] x={sqrt(iv)} -rm 1 -f $x -endl -done -a x
+  -endl -done -v +
+
+#@gmic denoise_iuwt:_threshold,_nlevels>2,_spline>1
 #@gmic : denoising by iterative thresholding "isotropic undecimated wavelet transform"
-#@gmic : u_{n+1} = u_n + lambda T(W u_n)
+#@gmic : u_{n+1} = P(u_n + gamma (f - u_n)) with P a wavelet thresholding
 #@gmic : $ image.jpg --noise 10 --denoise_iuwt[-1] , -print_psnr
 denoise_iuwt: -skip ,${1=1.4},${2=10},${3=10},${4=3},${5=3}
-  -e[^-1] "Denoise using the isotropic undecimated wavelet transform"
+  -e[^-1] "Denoise using the isotropic undecimated B"$5" spline wavelet transform"
   -v - -repeat @# -l[$>]
-    -repeat $2 --l[-1] -iuwt $4,$5 -threshold[1--1] $1,1 -+ -endl -*[-1] $3 -+ -/ {1+$3} -done
-  -endl -done  -v +
-
-#@gmic denoise_iuwt_wiener:_scale,_nlevels>2,_spline>1
-#@gmic : denoising by thresholding "isotropic undecimated wavelet transform"
-#@gmic : $ image.jpg --noise 10 --denoise_iuwt[-1] , -print_psnr
-denoise_iuwt_wiener: -skip ,${1=1.5},${2=2},${3=1}
-  -e[^-1] "Denoise using the isotropic undecimated wavelet transform"
-  -v - -repeat @# -l[$>]
-     -iuwt $2,$3 -localwiener[1--1] $1 -+
+    # Compute noise std at each level
+    --iuwt_std[0] $2,$3 -reverse
+    # comupte the wavelet coefficient and threshold them
+    -iuwt[-1] $2,$3 -repeat {@#-2} -threshold[{$>+2}] {$1*@{0,i($>)}},1 -done
+    # reconstruct
+    -+[1--1]
+    -rm[0]
   -endl -done  -v +
 
 #---------------------------------
@@ -943,7 +949,7 @@ jeje_whiten_frequency_preview :
   -gimp_split_preview "-jeje_whiten_frequency $1,$2",$-1
 
 #@gimp _<b>Repair</b>
-#@gimp Denoise [Block PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
+#@gimp Smooth [Block PCA]: jeje_denoise_patch_dict, jeje_denoise_patch_dict_preview
 #@gimp : Patch = choice(1,4,8,16,32)
 #@gimp : Cycles = int(8,1,32)
 #@gimp : Components = float(1.1,1,9)
@@ -959,7 +965,7 @@ jeje_denoise_patch_dict:
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
-#@gimp Local Wiener : jeje_localwiener, jeje_localwiener_preview
+#@gimp Smooth [Wiener] : jeje_localwiener, jeje_localwiener_preview
 #@gimp : Scale = float(2,.5,10)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
@@ -969,20 +975,18 @@ jeje_localwiener :
 jeje_localwiener_preview:
 -gimp_split_preview "-jeje_localwiener $1",$-1
 
-#@gimp Denoise IUWT : jeje_denoise_iuwt,jeje_denoise_iuwt_preview
+#@gimp Smooth [IUWT] : jeje_denoise_iuwt,jeje_denoise_iuwt_preview
 #@gimp : Threshold = float(3,0,10)
-#@gimp : Iterations = int(1,1,10)
-#@gimp : Step = float(10,1,20)
 #@gimp : Number of scales = int(3,2,6)
 #@gimp : Wavelet = choice("Spline B1","Spline B2","Spline B3","Spline B4","Spline B5","Spline B6")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small><b>Note:</b> Compute a pseudo wavelet transform by applying successivly 'Number of scales' times a blur of parameter 'Scale' and thresholding the successives differences by a soft-threshold equal to 'Threshold' times the estimated noise standard deviation from the first wavelet level.'</small>")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/12/12</i>.</small>")
+#@gimp : sep = separator(), note = note("<small><b>Note:</b>Denoise the image by thresholding the coefficient of the Isotropic Undecimated Wavelet Transform.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/17/12</i>.</small>")
 jeje_denoise_iuwt :
--denoise_iuwt $1,$2,$3,$4,{$5+1}
+-denoise_iuwt $1,$2,{$3+1}
 
 jeje_denoise_iuwt_preview:
--gimp_split_preview "-jeje_denoise_iuwt $1,$2,$3,$4,$5",$-1
+-gimp_split_preview "-jeje_denoise_iuwt $1,$2,$3",$-1
 
 #@gimp Unstrip : jeje_unstrip, jeje_unstrip_preview
 #@gimp : Smoothness = float(1,0,10)
@@ -1121,6 +1125,21 @@ jeje_normalize_local_variance :
 jeje_normalize_local_variance_preview:
   -gimp_split_preview "-jeje_normalize_local_variance $1,$2,$3,$4,$5",$-1
 
+
+#@gimp Spotify : jeje_spotify,jeje_spotify_preview
+#@gimp : Scale = float(1,0.75,10)
+#@gimp : Iteration = int(1,0,10)
+#@gimp : Cut = bool(1)
+#@gimp : Channel(s) = choice(3,"All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Alpha","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/12/16/i>.</small>")
+jeje_spotify:
+ -apply_channels "-spotify $1,$2 -if $3 -c 0,255 -else -n 0,255 -endif",$4,0
+
+
+jeje_spotify_preview:
+  -gimp_split_preview "-jeje_spotify $1,$2,$3,$4",$5
+
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
 #@gimp 3D Rendering: jeje_render3d, jeje_render3d_preview
@@ -1155,6 +1174,8 @@ jeje_render3d:
 
 jeje_render3d_preview:
     -jeje_render3d $*
+
+
 
 
 
