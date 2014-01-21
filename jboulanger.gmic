@@ -176,11 +176,24 @@ pointscoordinates :
 -pointcloud3d -s3d -k[2] -split y,{h/3} -a x
 -endl -done -v +
 
+pair_distance:
+-repeat @# -l[$>] -s y -a c -endl -done
+-repeat @{1,w}
+--l[0,1]
+-shift[1] $>,0,0,0,2
+-- -norm
+-endl
+-done
+-rm[0,1]
+-a y
+-s x -repeat @# -shift[$>] 0,$>,0,0,2 -done -a x
+
+
 #@gmic circles : _size,_opacity,_color
 #@gmic : plot circles on image [0] at coordinates given by image [1]
 #@gmic : $ 256,256 -noise .1,2 --pointscoordinates --circles 5 -rm[-1]
 #@gmic : $ image.jpg --l[0] -blur 3 -structuretensors -blur 3 -eigen -k[0] -channels 1 --gt {9*@{-mad}} --max_patch[0] 8 -* -pointscoordinates -endl -circles 5 -rm[-1]
-circles : -skip ${1=10},${2=1},${3=255}
+circles : -skip ${1=10},${2=1},${3=255},${4=255},${5=255}
 -e[^-1] "draw @{1,w} circles on image [0]"
 -v -
 -repeat {@{1,w}}
@@ -189,7 +202,7 @@ circles : -skip ${1=10},${2=1},${3=255}
     -repeat @{0,s} -sh[0] $z,$z,$> -ellipse[-1] $x,$y,$1,$1,0,$2,0xFFFFFF,$3 -rm[-1] -done
    -else
     x=@{1,i($>,0)} y=@{1,i($>,1)}
-    -ellipse[0] $x,$y,$1,$1,0,$2,0xFFFFFF,$3
+    -ellipse[0] $x,$y,$1,$1,0,$2,0xFFFFFF,$3,$4,$5
   -endif
 -done
 
@@ -265,7 +278,7 @@ n={$1-1}
 -v +
 
 #@gmic fftshift
-#@gmic : shift a image so that the fft has it center in the middle
+#@gmic : Shift a image so that the fft has it center in the middle
 #@gmic : $ image.jpg -fftshift
 fftshift :
 -v - -repeat @# -l[$>]
@@ -284,7 +297,7 @@ whiten_frequency : -check "${1=.25}>=0"
 -endl -done -v +
 
 #@gmic deblur_goldmeinel2 : sigma>=0, _nb_iter>=0, _acceleration>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
-#@gmic : Deblur selected images using Gold-Meinel algorithm
+#@gmic : Deblur and zoom selected images using Gold-Meinel algorithm
 #@gmic : Default values: 'nb_iter=8', 'acceleration=1' and 'kernel_type=1'.
 #@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
 ###### : (contribution from Jérôme Boulanger).
@@ -298,22 +311,67 @@ deblur_goldmeinel2 : -check "$1>=0 && ${2=8}>=0 && ${3=1}>=0" -skip ${4=1} -skip
   -endl -done -v +
 
 #@gmic deblur_richardsonlucy2 : sigma>=0, nb_iter>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
-#@gmic : Deblur selected images using Richardson-Lucy algorithm.
+#@gmic : Deblur and zoom selected images using Richardson-Lucy algorithm.
 #@gmic : Default values: 'nb_iter=50' and 'kernel_type=1'.
 #@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
 ###### : (contribution from Jérôme Boulanger).
 deblur_richardsonlucy2 : -check "$1>=0 && ${2=50}>=0" -skip ${3=1} -skip ${4=1}
   -e[^-1] "Deblur image$? using Richardson-Lucy algorithm, with sigma $1, $2 iterations and "@{-arg\ 1+!$3,"",quasi-}"gaussian kernel."
-  -v - -repeat @# -l[$>]
-    [0] -r[-1] 200%,200%,200% -repeat $2
-      --b[-1] $1,1,{$3!=0} -r[-1] 50%,50%,50% --/[0,-1] -rm[-2] -r[-1] 200%,200%,200% -b[-1] $1,1,{$3!=0}  -*[-1,-2] # u *= H ( f / Hu )
+    -v - -repeat @# -l[$>]
+    [0] -r[-1] 200%,200%,200%,100%,5 -repeat $2
+    --b[-1] $1,1,{$3!=0} -r[-1] 50%,50%,50%,100%,5 --/[0,-1] -rm[-2] -r[-1] 200%,200%,200%,100%,5 -b[-1] $1,1,{$3!=0}  -*[-1,-2] # u *= H ( f / Hu )
     -done -rm[0]
   -endl -done -v +
 
-#@gmic localvariance : _radius
+#@gmic correlate_fft
+#@gmic : Convolve selected images two-by-two through fourier transforms.
+#@gmic : $ image.jpg 100%,100% -gaussian[-1] 20,1,45 --convolve_fft
+correlate_fft :
+  -e[^-1] "Correlate image$? two-by-two through fourier transforms."
+  -v - -repeat {int(@#/2)} -l[$>,{$>+1}]
+    w2={int(@{0,w}/2)} h2={int(@{0,h}/2)} d2={int(@{0,d}/2)}
+    -r[1] [0],[0],[0],1,0,0,0.5,0.5,0.5,0.5 -shift[1] -$w2,-$h2,-$d2,0,2
+    -fft[0] -fft[2] -*[1] -1
+    --*[-4] [-1] --*[-4] [-3] -+[-2,-1]
+    -*[-5,-3] -*[-3,-2] --[-3,-2]
+    -ifft -rm[-1]
+  -endl -done -v +
+
+#@gmic deconvolve_richardsonlucy : nb_iter>=0, 
+#@gmic : deconvolve images using the first one as a blur operator (PSF)
+#@gmic : $ image.jpg 100%,100% -gaussian[-1] 3,1,45 -normalize_sum[-1] --convolve_fft -reverse -deconvolve_richardsonlucy[1,2] 10 -print_psnr[0,2]
+deconvolve_richardsonlucy :  -check "${1=5}>=1"
+ -e[^-1] "Deblur image$? using Richardson-Lucy algorithm with a custom filter."
+ -v - -repeat {@#-1} -l[0,{$>+1}]
+ [1] -repeat $1
+ --convolve_fft[0,-1] --/[1,-1] -rm[-2] --correlate_fft[0,-1] -rm[-2] -*[-1,-2]
+ -done -rm[1]
+ -endl -done -v + 
+
+#@gmic deconvolve_goldmeinel :  _nb_iter>=0, _acceleration>=0
+#@gmic : Deblur and zoom selected images using Gold-Meinel algorithm
+#@gmic : Default values: 'nb_iter=8', 'acceleration=1' and 'kernel_type=1'.
+#@gmic : $ image.jpg 100%,100% -gaussian[-1] 5,1,45 -normalize_sum[-1] --convolve_fft -reverse -deconvolve_goldmeinel[1,2] 5 -print_psnr[0,2]
+deconvolve_goldmeinel : -check "${1=5}>=1&&${2=1}>=1"
+  -e[^-1] "Deblur image$? using Gold-Meinel algorithm, with $1 iterations, acceleration $2."
+  -v - -repeat {@#-1} -l[0,{$>+1}]
+    [1] -repeat $2
+     --convolve_fft[0,-1]  --/[1,-1] -rm[-2] -^[-1] $2 -*[-1,-2] # u *= (f / Hu)^$3
+    -done -rm[1]
+  -endl -done -v +
+
+#@gmic normalize_sum 
+#@gmic : Normalize the image so that the sum of the values is 1
+#@gmic : $ image.jpg --normalize_sum 
+normalize_sum :
+ -v - -repeat @# -l[$>]
+ -* {1/(ia*w*h*d*s)}
+ -endl -done -v +
+
+#@gmic local_variance : _radius
 #@gmic : Local variance filter
-#@gmic : $ image.jpg  -localvariance
-localvariance: -skip ${1=2}
+#@gmic : $ image.jpg  --local_variance
+local_variance: -skip ${1=2}
 -e[^-1] "Local Variance filter with scale "$1
 -v - -repeat @# -l[$>]
 --blur $1,1,1 -- -sqr -blur $1,1,1
@@ -321,25 +379,25 @@ localvariance: -skip ${1=2}
 
 #@gmic normalize_local_variance : _amplitude,_radius,_threshold,_repeat
 #@gmic : Local variance normalization
-#@gmic : $ image.jpg  -localvariance
+#@gmic : $ image.jpg  --normalize_local_variance
 normalize_local_variance: -skip ${1=50},${2=2},${3=25},${4=1}
   -e[^-1] "Normalize local variance with amplitude $1, scale $2, threshold $3 (x$4 times)."
   -v -
   -repeat $4
-   --localvariance $2 -sqrt[-1] -max[-1] $3 # compute local standard deviation
+   --local_variance $2 -sqrt[-1] -max[-1] $3 # compute local standard deviation
    --blur[0] $2,1,1 ---[0,-1] -/[-1] [1] -*[-1] $1 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
   -done -v +
 
-#@gmic localwiener : _radius
+#@gmic local_wiener : _radius
 #@gmic : Local Wiener filtering
 #@gmic : X = <X> + ((<X-<X>>)'(<X-<X>>) - <N'N>)/(<X-<X>>)'(<X-<X>>) (X-<X>)
-#@gmic : $ image.jpg -noise 10 -localwiener
-localwiener : -skip ${1=2}
+#@gmic : $ image.jpg --noise 10 --local_wiener[-1] 1 -print_psnr
+local_wiener : -skip ${1=2}
 -e[^-1] "Local Wiener filtering"
 -v - -repeat @# -l[$>]
 sigma=@{-noise_std}
 --blur $1 # mean
---localvariance[0] {2*$1} ---[-1] {$sigma*$sigma} -reverse[-1,-2] -/[-1,-2] # variance
+--local_variance[0] {2*$1} ---[-1] {$sigma*$sigma} -reverse[-1,-2] -/[-1,-2] # variance
 ---[0,1] # img-mean
 -*[-1,-2] -+[-1,-2] -k[-1]
 -endl -done -v +
@@ -377,7 +435,7 @@ powerspectrum :
 
 #@gmic fouriermix : _cut_of_frequency
 #@gmic :  Mix two images using their respectives low and high frequencies
-#@gmic : $ image1.jpg image2.jpg -fouriermix .5
+#@gmic : $ image1.jpg image2.jpg  --fouriermix .5
 fouriermix : -skip ${1=50%}
 -e[^-1] "fourier mix images."
 -fft[0] -fft[2] -fftshift
@@ -388,11 +446,11 @@ fouriermix : -skip ${1=50%}
 
 #@gmic fouriercut : _threshold
 #@gmic : Illustrate the thresholding of Fourier coefficients
-#@gmic : $ image.jpg -fouriercut
+#@gmic : $ image.jpg --noise 10 --fouriercut[-1] 1 -print_psnr
 fouriercut : -skip ${1=1}
 -e[^-1] "Threshold Fourier coefficients with threshold "$1"."
 -v - -repeat @# -l[$>]
---tape -l[-1] -powerspectrum -threshold {ia+$1*sqrt(iv)} -blur 5 -fftshift -endl
+--l[-1] -powerspectrum -threshold $1 -fftshift -endl
 -fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft -k[0]
 -endl -done -v +
 
@@ -403,10 +461,20 @@ unstrip : -skip ${1=25},${2=20},${3=4}
 -e[^-1] "Remove stripes"
 -v - -repeat @# -l[$>]
 # create a mask
---tape -l[-1] -powerspectrum -norm -detect_spots 1,$3 -dilate_circ $2 -gt 0 -n 0,1
--negative -circle 50%,50%,$2,1,1 -blur $1 -n 0,1 -fftshift -if {iM==0} -f 1 -endif -endl
-#apply the mask
--fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft -k[0]
+   --l[-1]
+     -tape -powerspectrum -norm -detect_spots 1,$3 -dilate_circ $2 -gt 0
+     -n 0,1 -negative -circle 50%,50%,$2,1,1
+     -if {@{-1,im}<.9} # check if some spots have been detected
+       active=1 -blur $1 -n 0,1 -fftshift -if {iM==0} -f 1 -endif
+     -else
+       active=0
+     -endif
+   -endl
+   #apply the mask
+   -if {$active==1}
+    -fft[0] -*[0] [-1] -*[1] [-1] -rm[-1] -ifft
+   -endif
+   -k[0]
 -endl -done -v +
 
 #@gmic autocorrelate
@@ -435,9 +503,9 @@ C={2*pi/$3*$1/$2*50}
 beads2psf : -skip ${1=5}
 -e[^-1] "Compute a PSF from an image bead using autocorrelation method"
 -v - -repeat @# -l[$>]
--tape 1  -autocorrelate -threshold {sqrt(@{0,iv})},1
+-tape -autocorrelate -- {sqrt(@{0,iv})} -threshold 0,1
 -f 'dx=x-w/2;dy=y-h/2;dz=z-d/2;sigma=9+$1*dz*dz;i*exp(-.5*(dx*dx+dy*dy)/(sigma))/sqrt(2*pi*sigma)'
--sqr
+-sqr -* {1/(ia*w*h*d*s)} 
 -endl -done -v +
 
 #@gmic simmod:
@@ -469,6 +537,12 @@ tubeness : -check "${1=1}>0"
     -hessian -a c -eigen -k[0] -s c -k[1] -* -1 -cut 0,100%
   -endl -done -a c
 -endl -done -v +
+
+bgsubstract:
+ -e[^-1] "Temporal background substraction with length $1."
+ -v - -repeat @# -l[$>]
+   1,1,$1 -f[-1] 1 --erode[0] [1] --[0] [-1] -rm[1,-1]
+ -endl -done -v +
 
 #@gmic schizo : _amplitude,_amplitude_normal,_nb_iterations,_strength
 #@gmic : Schizo filter gives either a furry image or a smoothed image
@@ -588,7 +662,7 @@ display_colordepth :
 
 #@gmic add_colorbar : x0,y0,x1,y1,_min,_max,_ntics,color,colormap
 #@gmic : Add a colorbar to the image
-#@gmic : $ gmic image.jpg -luminance -map 5 -add_colorbar {w-40},20,{w-30},{h-20},0,255,6,255,5
+#@gmic : $ image.jpg -luminance -map 5 -add_colorbar {w-40},20,{w-30},{h-20},0,255,6,255,5
 add_colorbar :
 -skip ${5=0},${6=255},${7=6},${8=255},${9=""},${10=5}
 -repeat @# -l[$>]
@@ -703,12 +777,12 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
 
 
 #@gmic iuwt: _nlevels>2,_spline>1
-#@gmic : compute the "isotropic undecimated wavelet transform" using
+#@gmic : Compute the "isotropic undecimated wavelet transform" using
 #@gmic : a trou algorithm for the B3-Spline wavelet.
 #@gmic : The inverse is obtained as the sum of all coefficients
-#@gmic : $ image.jpg -wavelet 4,1 -n 0,255 -append_tiles
-#@gmic : $ image.jpg -wavelet 3,1 -+
-iuwt: -skip ${1=3},${2=3} #-check {$1>1},{$2>1}
+#@gmic : $ image.jpg -iuwt 4,1 -n 0,255 -append_tiles
+#@gmic : $ image.jpg -iuwt 3,1 -+
+iuwt: -skip ${1=3},${2=3}
   -e[^-1] "Compute isotropic undecimated wavelet transform"
   -v - -repeat @# -l[$<]
   # Compute the Spline filter by succesive convolutions
@@ -733,19 +807,18 @@ iuwt: -skip ${1=3},${2=3} #-check {$1>1},{$2>1}
 
 #@gmic iuwt_std : _nlevels>2,_spline>1
 #@gmic : Compute noise at each level of the iuwt
-#@gmic : $ gmic image.jpg -iuwt_std
+#@gmic : $ image.jpg -iuwt_std 10,10
 iuwt_std:
  -v - -repeat @# -l[$>]
  sigma=@{-noise_std}
  -f 0 -noise $sigma -iuwt $1,$2 -repeat @# -l[$>] x={sqrt(iv)} -rm 1 -f $x -endl -done -a x
   -endl -done -v +
 
-#@gmic denoise_iuwt:_threshold,_nlevels>2,_spline>1
-#@gmic : denoising by iterative thresholding "isotropic undecimated wavelet transform"
-#@gmic : u_{n+1} = P(u_n + gamma (f - u_n)) with P a wavelet thresholding
+#@gmic denoise_iuwt:_threshold>0,_nlevels>2,_spline>1
+#@gmic : Denoising by thresholding the coefficients of the "isotropic undecimated wavelet transform"
 #@gmic : $ image.jpg --noise 10 --denoise_iuwt[-1] , -print_psnr
-denoise_iuwt: -skip ,${1=1.4},${2=10},${3=10},${4=3},${5=3}
-  -e[^-1] "Denoise using the isotropic undecimated B"$5" spline wavelet transform"
+denoise_iuwt: -check "${1=1.4}>0&&${2=4}>2&&${3=3}>1"
+  -e[^-1] "Denoise using the isotropic undecimated B"$3" spline wavelet transform"
   -v - -repeat @# -l[$>]
     # Compute noise std at each level
     --iuwt_std[0] $2,$3 -reverse
@@ -799,7 +872,7 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=50%},${5=1}
   -blur[-1] $5 -gt[-1] 0 -rm[0]
 -endl -done -v +
 
-# segment_cells:
+#@gmic segment_cells:
 #@gmic : Cell segmentation using watershed
 #@gmic : $ 256,256 -noise .05,2 -blur 10,1,1 -min 80% -noise 5% --segment_cells 2,10% -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -n 0,255 -blend add
 segment_cells: -skip ${1=5},${2=10%}
@@ -841,8 +914,9 @@ periodic_dots : -skip ${1=6},${2=4},${3=.5}
  -endl -done -a c
 -endl -done -v +
 
-#@gmic rays :
-#@gmic : generate rays patterns
+#@gmic rays : _center_x,_center_y,_scale,_phase
+#@gmic : Generate rays patterns
+#@gmic : $ image.jpg --rays 155,127,10,10 -n[-1] 0,1 -mul
 rays :
 -e[^-1] "Generate a ray pattern centered in ($1,$2)"
 -f 't=atan2(y-$2,x-$1);sin($3*t+$4)'
@@ -852,7 +926,7 @@ rays :
 #@gmic : Using a power low of the form (eps+|f|)^(-2^H-1)
 #@gmic : where f is the module of the frequency, H the husrt index and eps _epsilon.
 #@gmic : (see also -clouds)
-#@gmic : $ 400,300 -frational_brownian_motion
+#@gmic : $ 400,300 -fractional_brownian_motion
 fractional_brownian_motion : -skip ${1=.5},${2=1} -check "$1>=0&&$1<=1" -check "$2>0"
 -v - -repeat @# -l[$>]
 -f 0 -noise 1
@@ -965,15 +1039,15 @@ jeje_denoise_patch_dict:
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
-#@gimp Smooth [Wiener] : jeje_localwiener, jeje_localwiener_preview
+#@gimp Smooth [Wiener] : jeje_local_wiener, jeje_local_wiener_preview
 #@gimp : Scale = float(2,.5,10)
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
-jeje_localwiener :
--localwiener $1 -c 0,255
+jeje_local_wiener :
+-local_wiener $1 -c 0,255
 
-jeje_localwiener_preview:
--gimp_split_preview "-jeje_localwiener $1",$-1
+jeje_local_wiener_preview:
+-gimp_split_preview "-jeje_local_wiener $1",$-1
 
 #@gimp Smooth [IUWT] : jeje_denoise_iuwt,jeje_denoise_iuwt_preview
 #@gimp : Threshold = float(3,0,10)
