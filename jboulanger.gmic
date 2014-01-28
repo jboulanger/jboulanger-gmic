@@ -144,6 +144,19 @@ colordepth_scale: -skip ${1=5}
 #
 #---------------------------------
 
+#@gmic lucas_kanade: _scale
+#@gmic : Motion estimation using lucas and kanade approach
+#@gmic : Works on 2D+t image stacks
+#@gmic : $ image.jpg -repeat 20 --shift[-1] 1,0,0,0,2 -done -a z --lucas_kanade 2 -n 0,255 -frame 2 -a x
+lucas_kanade:
+-structuretensors 1 -blur_xy $1 # abcdef
+--l -s c -rm[0,-1] -*[1,2] -*[0,2] -reverse -- -endl  # dc-be
+--l[0] -s c -rm[3,5] -*[0,3] -*[1,2] -- -endl # ae-bc
+-l[0] -s c -rm[2,4,5] -*[0,2] -sqr[1] -- -endl # ad-b2
+-/[1,2] [0]  -rm[0] -a c
+
+
+
 #@gmic detect_events : _scale_xy,_scale_t,_threshold
 #@gmic : Detect space time events using space time interest points
 #@gmic : $ 100,100,100 -noise 1 -blur 2 -detectevents
