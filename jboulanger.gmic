@@ -337,32 +337,35 @@ correlate_fft :
     -ifft -rm[-1]
   -endl -done -v +
 
-#@gmic deconvolve_richardsonlucy : nb_iter>=0, 
+#@gmic deconvolve_richardsonlucy : nb_iter>=0,
 #@gmic : deconvolve images using the first one as a blur operator (PSF)
-#@gmic : $ image.jpg 100%,100% -gaussian[-1] 3,1,45 -normalize_sum[-1] --convolve_fft -reverse -deconvolve_richardsonlucy[1,2] 10 -print_psnr[0,2]
+#@gmic : $ image.jpg 100%,100% -gaussian[-1] 3,1,45 -normalize_sum[-1] --convolve_fft -deconvolve_richardsonlucy[1,2] 10 -print_psnr[0,2]
 deconvolve_richardsonlucy :  -check "${1=5}>=1"
  -e[^-1] "Deblur image$? using Richardson-Lucy algorithm with a custom filter."
- -v - -repeat {@#-1} -l[0,{$>+1}]
+ -v -
+ -repeat {@#-1} -l[0,{$>+1}]
+ -r[0] @{1,w},@{1,h},@{1,d},100%,0,0,.5,.5,.5 -normalize_sum[0]
  [1] -repeat $1
  --convolve_fft[0,-1] --/[1,-1] -rm[-2] --correlate_fft[0,-1] -rm[-2] -*[-1,-2]
- -done -rm[1]
- -endl -done -v + 
+ -done -rm[0,1]
+ -endl -done -v +
 
 #@gmic deconvolve_goldmeinel :  _nb_iter>=0, _acceleration>=0
 #@gmic : Deblur and zoom selected images using Gold-Meinel algorithm
 #@gmic : Default values: 'nb_iter=8', 'acceleration=1' and 'kernel_type=1'.
-#@gmic : $ image.jpg 100%,100% -gaussian[-1] 5,1,45 -normalize_sum[-1] --convolve_fft -reverse -deconvolve_goldmeinel[1,2] 5 -print_psnr[0,2]
+#@gmic : $ image.jpg 100%,100% -gaussian[-1] 5,1,45 -normalize_sum[-1] --convolve_fft -deconvolve_goldmeinel[1,2] 5 -print_psnr[0,2]
 deconvolve_goldmeinel : -check "${1=5}>=1&&${2=1}>=1"
   -e[^-1] "Deblur image$? using Gold-Meinel algorithm, with $1 iterations, acceleration $2."
   -v - -repeat {@#-1} -l[0,{$>+1}]
+    -r[0] @{1,w},@{1,h},@{1,d},100%,0,0,.5,.5,.5 -normalize_sum[0]
     [1] -repeat $2
      --convolve_fft[0,-1]  --/[1,-1] -rm[-2] -^[-1] $2 -*[-1,-2] # u *= (f / Hu)^$3
-    -done -rm[1]
+    -done -rm[0,1]
   -endl -done -v +
 
-#@gmic normalize_sum 
+#@gmic normalize_sum
 #@gmic : Normalize the image so that the sum of the values is 1
-#@gmic : $ image.jpg --normalize_sum 
+#@gmic : $ image.jpg --normalize_sum
 normalize_sum :
  -v - -repeat @# -l[$>]
  -* {1/(ia*w*h*d*s)}
@@ -505,7 +508,7 @@ beads2psf : -skip ${1=5}
 -v - -repeat @# -l[$>]
 -tape -autocorrelate -- {sqrt(@{0,iv})} -threshold 0,1
 -f 'dx=x-w/2;dy=y-h/2;dz=z-d/2;sigma=9+$1*dz*dz;i*exp(-.5*(dx*dx+dy*dy)/(sigma))/sqrt(2*pi*sigma)'
--sqr -* {1/(ia*w*h*d*s)} 
+-sqr -* {1/(ia*w*h*d*s)}
 -endl -done -v +
 
 #@gmic simmod:
@@ -1250,11 +1253,28 @@ jeje_render3d_preview:
     -jeje_render3d $*
 
 
+#@gimp Deconvolve: jeje_deconvolve, jeje_deconvolve_preview
+#@gimp : Iterations = int(20,1,100)
+#@gimp : Algorithm = choice(0,"Richardson-Lucy","Gold-Meinel")
+#@gimp : Channel(s) = choice(3,"All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Alpha","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2014/01/27</i>.</small>")
+jeje_deconvolve:
+-reverse
+-if {$2==1}
+  -apply_channels "-deconvolve_goldmeinel $1 -n[0] 0,255",$3,0
+-else
+  -apply_channels "-deconvolve_richardsonlucy $1 -n[0] 0,255",$3,0
+-endif
+
+jeje_deconvolve_preview:
+ -gimp_split_preview "-jeje_deconvolve $1,$2,$3",$4
 
 
 
 # Local Variables:
 # mode: sh
+# time-stamp-pattern: "Lastest update: <i>%02y/%02m/%02d</i>"
 # End:
 #
 # (End of G'MIC custom commands)
