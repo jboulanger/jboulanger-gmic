@@ -144,22 +144,92 @@ colordepth_scale: -skip ${1=5}
 #
 #---------------------------------
 
+#@gmic quiver2d
+#@gmic : Display a sequence 2D vector field on a 2D image sequence
+#@gmic : both being represented az a 3D stack
+quiver2d:
+-s z -repeat {@#/2} -l[$>,{$>+@#/2}] -quiver[0] [1] -endl -done -rm[{@#/2}--1] -a z
+
+cumul2d:
+-s z -repeat {@#-1} -+[{$>+1}] [$>] -done -a z
+
+#@gmic : $ tmp.cimg  -a z -resize 50%,50% --l[0] --lucas_kanade 5,1  -cumul2d[-1] -frame 30,30,0  -warp2d -endl -frame[0] 30,30,0 -a x
+warp2d:
+-s z -repeat {@#/2} -l[$>,{$>+@#/2}] -warp[0] [1],1,1,2 -endl -done -rm[{@#/2}--1] -a z
+
 #@gmic lucas_kanade: _scale
 #@gmic : Motion estimation using lucas and kanade approach
-#@gmic : Works on 2D+t image stacks
+#@gmic : Works on 2D+t image stacks/ has side effect
+#@gmic : [vx vy] = [Ixx Ixy; Ixy Iyy]^-1 [Ixt Iyt]
 #@gmic : $ image.jpg -repeat 20 --shift[-1] 1,0,0,0,2 -done -a z --lucas_kanade 2 -n 0,255 -frame 2 -a x
-lucas_kanade:
--structuretensors 1 -blur_xy $1 # abcdef
+#@gmic : $ image.jpg -repeat 20 --shift[-1] 1,1,0,0,2 -done -a z --lucas_kanade 2  -s z -repeat '{@#/2}' -l['$>','{$>+@#/2}'] -quiver[0] [1] -endl -done -rm['{@#/2}'--1] -a z
+lucas_kanade: -skip ${1=2},${2=1}
+-blur_xy $2 -structuretensors 0 -blur_xy $1 # abcdef
 --l -s c -rm[0,-1] -*[1,2] -*[0,2] -reverse -- -endl  # dc-be
 --l[0] -s c -rm[3,5] -*[0,3] -*[1,2] -- -endl # ae-bc
 -l[0] -s c -rm[2,4,5] -*[0,2] -sqr[1] -- -endl # ad-b2
 -/[1,2] [0]  -rm[0] -a c
 
+#@gmic estimate_shift
+#@gmic : Estimate a small translation between two images with sub-pixel accuray
+estimate_shift:
+-blur_xy 1 --gradient[0] xy,0 --[0,1] --sqr[1,2] --*[1,2] [0] -*[1,2] -rm[0]
+Ixy=@{0,ia} Ixx=@{1,ia} Iyy=@{2,ia} Ixt=@{3,ia} Iyt=@{4,ia}
+vx={($Iyy*$Ixt-$Ixy*$Iyt)/($Ixx*$Iyy-$Ixy*$Ixy)}
+vy={($Ixx*$Iyt-$Ixy*$Ixt)/($Ixx*$Iyy-$Ixy*$Ixy)}
+#-echo_stdout $vx,$vy
+-rm 1,2 -f $vx,$vy
+
+#@gmic multi_resolution_pyramide : _number_of_scales
+#@gmic : Build a multi-resolution pyramid
+multi_resolution_pyramide:
+-v - -repeat @# -l[$<]
+-repeat {$1-1} --resize[-1] 50%,50% -done -reverse
+-endl -done -v +
+
+#@gmic estimate_shift_mr
+#@gmic : Estimate a translations between two images with sub-pixel accuray
+#@gmic : using a multi-resolution scheme
+#@gmic : $ gmic image.jpg -luminance --shift 2,3 -crop 5%,5%,95%,95% -estimate_shift_mr 3
+estimate_shift_mr: -skip ${1=2}
+-multi_resolution_pyramide $1
+1,2
+-repeat {$1-1}
+  --estimate_shift[$>,{$1+$>}] -*[-1,-2] -2 -+[-1,-2]
+  @{{$>+1},w},@{{$>+1},h},1,2 -f[-1] 'if(c==0,@{-2,i(0)},@{-2,i(0,1)})'
+  -warp[{$1+$>+1}] [-1],1,1,1 -rm[-1] -*[-1] -1
+-done
+-k[-1]
+
+#@gmic unshift : _iterations
+#@gmic : Correct drift along Z in a 3D volume (video stabilization)
+#@gmic : Use the linearized optical flow constraint iteratively
+#@gmic : $ movie.cimg -luminance -resize 50%,50%  -a z -unshift 5
+unshift: -skip ${1=10}
+-repeat $1
+-s z -repeat {@#-1} -l[$>,{$>+1}]
+--estimate_shift_mr 5 -*[-1] -1
+@{0,w},@{0,h} -f[-1] '@{2,i(0)}' --f[-1] '@{2,i(1)}' -a[-1,-2] c
+-warp[1] [-1],1,1,1 -rm[-1,-2]
+-endl -done -a z
+-done
+
+#@gmic register_lucas_kanade : _iterations, _scale
+#@gmic : Register images using lucas kanade motion estimation
+#@gmic : $ movie.cimg -luminance -resize 50%,50% -a z -register_lucas_kanade 5,10
+register_lucas_kanade :  -skip ${1=10},${2=10}
+--lucas_kanade $2 -cumul2d[-1] --warp2d
+-repeat $1
+-lucas_kanade[-1] $2 -cumul2d[-1] -+[-1,-2] --warp2d
+-done
+
+
+# -k[0,1] -resize 5%,5%  --estimate_shift  -*[-1] 10 -i [0] -r[-1] 100%,100%,1,1 -f[-1] '@{2,i(0)}' --f[-1] '@{2,i(1)}' -a[-1,-2] c -warp[1] [-1],1,1,0 -k[0,1] -a z
 
 
 #@gmic detect_events : _scale_xy,_scale_t,_threshold
 #@gmic : Detect space time events using space time interest points
-#@gmic : $ 100,100,100 -noise 1 -blur 2 -detectevents
+#@gmic : $ 100,100,100 -noise 1 -blur 2 --detectevents , -pointscoordinates[-1] -resize[0] 100%,100%,100%,3,1 -n[0] 0,255 -circles 5,.5,128,128,32 -k[0]
 detectevents : -skip ${1=1},${2=1},${3=9}
 -e[^-1] "detect events with scale_xy $1 scale_z $2 and threshold $3"
 -v - -repeat @# -l[$>]
@@ -289,6 +359,33 @@ n={$1-1}
 -done
 -if {$n%2!=0} -reverse -endif
 -v +
+
+#@gmic zmean
+#@gmic : average along z-axis
+zmean :
+-v - -repeat @# -l[$>]
+n=@{0,d} -s z -+ -/ $n
+-endl -done -v +
+
+#@gmic zstd
+#@gmic : standard deviation along z-axis
+zstd :
+-v - -repeat @# -l[$>]
+--zmean -sqr[-1]
+-l[0] -sqr -zmean -endl
+-- -sqrt
+-endl -done -v +
+
+#@gmic kymoline:
+#@gmic : interactively select a line and extract a line profile
+kymoline:
+--select 1
+x1=@{-1,i(0,0)} y1=@{-1,i(0,1)} x2=@{-1,i(0,3)} y2=@{-1,i(0,4)}
+d={sqrt(($x2-$x1)^2+($y2-$y1)^2)}
+u={($x2-$x1)/$d} v={($y2-$y1)/$d}
+-rm[-1]
+-f 'if(x<=$d&&y==0,i($x1+x*$u,$y1+x*$v,z,c,1),5)'
+-crop 0,0,{int($d-1)},0
 
 #@gmic fftshift
 #@gmic : Shift a image so that the fft has it center in the middle
@@ -641,6 +738,15 @@ midway :
 -+[-1] {$b} -*[-1] {1/$a} -a c
 -endl -done
 
+midway2:
+ --l[0] -s c -y y 1,@{0,h},1,1,1 -a x -svd -k[-1] -endl
+ params=(@{1,i(0,0)},@{1,i(1,0)},@{1,i(2,0)};\
+         @{1,i(0,1)},@{1,i(1,1)},@{1,i(2,1)};\
+         @{1,i(0,2)},@{1,i(1,2)},@{1,i(2,2)})
+ -rm[1]
+ -echo_stdout $params
+ -mix_channels[0] $params  -n 0,255
+
 #@gmic vobs : _scale
 #@gmic : Motion quantity (Normal motion)  h * (|Ixy|^2 |It|/|Ixy|) / h * Ixy^2
 #@gmic : $ 100,100,10 -noise 1 -blur 1 --vobs
@@ -715,7 +821,7 @@ ldc :
 #@gmic : Display local diffusion coefficient
 #@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
 display_ldc :
---ldc 5,3 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
+--ldc 2,3 A={round(@{-1,im},0.001)} B={round(@{-1,iM},0.001)} -*[-1] '{128/max(im,iM)}' -+[-1] 128  -map[-1] 5
 -resize[0] 100%,100%,100%,3,1 -apply_gamma[0] 1.5 -n[0] 0,255
 -l[0] -s z -frame 5,12,64 -shift 0,5,0,0,2 -text "Original sequence",5,0,13,1,255 -a z -endl
 -l[1] -s z -repeat @# -l[$>] 1,100% -f[-1] 'h-y' -n 0,255  -map[-1] 5 -resize[-1] 5,@{0,h},1,3,5 -frame[-1] 3,0,64  -resize[-1] 100%,@{0,h},1,3,5 -a x
@@ -740,8 +846,80 @@ noise_std :
 -v - --laplacian -if {@{0,d}==1}  -u {@{-mad[-1]}/sqrt(20.0)} -else -u {@{-mad[-1]}/sqrt(42.0)} -endif -rm[-1]
 -v +
 
+#@gmic: pca
+#@gmic: -y y -a x
+pca:
+n=@{-1,w} -- 'ia' --transpose[-1] -**[-2,-1] -/ $n -eigen
+
+#@gmic spca : _threshold,_iterations
+#@gmic sparse pca
+spca: -skip ${2=20}
+-v - -repeat @# -l[$>]
+  -repeat $2
+    p={sqrt(h)}
+    --l --pca -k[0,-1]  -reverse -transpose[0] --** -threshold[-1] $1,1 -rm[1] -transpose[0] -** -endl
+    -*[0] .25 -*[1] .75 -+
+  -done
+  -pca
+-endl -done -v +
+
+
+#@gmic kpca : _components,_iterations
+#@gmic : pca with k components
+kpca: -skip ${2=20}
+-v - -repeat @# -l[$>]
+  -repeat $2
+    p={sqrt(h)}
+    --l --pca -k[0,-1] -reverse -crop[0] 0,{$1-1} -transpose[0] --** -rm[1] -transpose[0] -** -endl
+    -*[0] .25 -*[1] .75 -+
+  -done
+  -pca -crop[0] 0,0,1,{$1-1} -crop[1] 0,{$1-1}
+-endl -done -v +
+
+
+# denoise with karumen loeve transform
+denoise_klt:
+-v - -repeat @# -l[$>]
+-split_tiles 64,64 -y y -a x --pca -k[0,-1] -reverse -crop[0] 0,$1 -transpose[0] --** -rm[1] -transpose[0] -** -s x -resize 8,8,1,1,-1 -append_tiles ,
+-endl -done -v +
+
+
+dlearn:
+-split_tiles 64,64 -y y -a x -kpca 10,$1 -k[-1]
+
+#
+ddenoise:
+-l[1] -split_tiles 64,64 -y y -a x -endl
+-transpose[0] --** -threshold[-1] $1,1 -rm[1] -transpose[0] -** -s x -resize 8,8,1,1,-1 -append_tiles
+
+# $ image.jpg --noise 10 --denoise_klt[1] 50% --denoise_kpca[1] 12 -print_psnr
+denoise_kpca:
+-v - -repeat @# -l[$>]
+-parallel "
+--l
+-split_tiles 64,64 -y y -a x --kpca 10,$1 -k[0,-1] -reverse -transpose[0] --** -threshold[-1] $1,1 -rm[1] -transpose[0] -** -s x -resize 8,8,1,1,-1 -append_tiles ,
+-endl","
+--l[0]
+-shift 4,4,0,0,2
+-split_tiles 64,64 -y y -a x --kpca 10,$1 -k[0,-1] -reverse -transpose[0] --** -threshold[-1] $1,1 -rm[1] -transpose[0] -** -s x -resize 8,8,1,1,-1 -append_tiles ,
+-shift -4,-4,0,0,2
+-endl","
+--l[0]
+-shift 4,0,0,0,2
+-split_tiles 64,64 -y y -a x --kpca 10,$1 -k[0,-1] -reverse -transpose[0] --** -threshold[-1] $1,1 -rm[1] -transpose[0] -** -s x -resize 8,8,1,1,-1 -append_tiles ,
+-shift -4,0,0,0,2
+-endl","
+--l[0]
+-shift 0,4,0,0,2
+-split_tiles 64,64 -y y -a x --kpca 10,$1 -k[0,-1] -reverse -transpose[0] --** -threshold[-1] $1,1 -rm[1] -transpose[0] -** -s x -resize 8,8,1,1,-1 -append_tiles ,
+-shift 0,-4,0,0,2
+-endl"
+-rm[0]
+-+ -/ 4
+-endl -done -v +
+
 #@gmic denoise_patch_dict : _patch_size,_nb_of_shifts,_thres_comp,_thres_coef
-#@gmic : Denoising using a dictionnary of patches learn on the image
+#@gmic : Denoising using a dictionnary of patches learned on the image
 #@gmic : work in progress...
 #@gmic : $ image.jpg --noise 20 --denoise_patch_dict[1] , -print_psnr
 denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
@@ -763,7 +941,7 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
       --shift[0] $dx,$dy,0,0,2
       -split_tiles[-1] $NtileX,$NtileY pW=@{1,w} pH=@{1,h} # split the image
     -done -rm[0]
-    -unroll y -a x n=@{-1,w} -- 'ia' --transpose[-1] -**[-2,-1] -/ $n -eigen # PCA
+    -y y -a x n=@{-1,w} -- 'ia' --transpose[-1] -**[-2,-1] -/ $n -eigen # PCA
     # select components based on noise level
     -l[-2] -unroll x -sqrt -gt {$3*$Sigma} -f 'abs(i(x+1)-i(x))'
     T=@{-1,C} 4 -f[-1] $T T=@{-1,i(0)} -endl
@@ -833,7 +1011,7 @@ iuwt_std:
 #@gmic denoise_iuwt:_threshold>0,_nlevels>2,_spline>1
 #@gmic : Denoising by thresholding the coefficients of the "isotropic undecimated wavelet transform"
 #@gmic : $ image.jpg --noise 10 --denoise_iuwt[-1] , -print_psnr
-denoise_iuwt: -check "${1=1.4}>0&&${2=4}>2&&${3=3}>1"
+denoise_iuwt: -check "${1=1.4}>0&&${2=4}>2&&${3=3}>0"
   -e[^-1] "Denoise using the isotropic undecimated B"$3" spline wavelet transform"
   -v - -repeat @# -l[$>]
     # Compute noise std at each level
@@ -1067,8 +1245,8 @@ jeje_local_wiener_preview:
 
 #@gimp Smooth [IUWT] : jeje_denoise_iuwt,jeje_denoise_iuwt_preview
 #@gimp : Threshold = float(3,0,10)
-#@gimp : Number of scales = int(3,2,6)
-#@gimp : Wavelet = choice("Spline B1","Spline B2","Spline B3","Spline B4","Spline B5","Spline B6")
+#@gimp : Number of scales = int(4,2,6)
+#@gimp : Wavelet = choice(2,"Spline B1","Spline B2","Spline B3","Spline B4","Spline B5","Spline B6")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small><b>Note:</b>Denoise the image by thresholding the coefficient of the Isotropic Undecimated Wavelet Transform.</small>")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/17/12</i>.</small>")
