@@ -1,4 +1,3 @@
-
 * jboulanger.gmic
   Jérôme Boulanger (jerome.boulanger@curie.fr)
 
