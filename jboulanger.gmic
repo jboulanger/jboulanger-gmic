@@ -73,7 +73,7 @@ toff3d : -e[^-1] "Save the 3D image as a tiff file"
 boundingbox3d : -skip ${1=10}
 -e[^-1] "3D Bounding box"
 -repeat @# -l[$>]
--box3d @{0,w},@{0,h},@{0,d} -primitives3d[-1] 1  -opacity3d[-1] .25
+-box3d @{0,w},@{0,h},@{0,d} -primitives3d[-1] 1  -opacity3d[-1] .1
 -if {$1>0}
   -plane3d @{0,w},@{0,h},$1,{round(@{0,h}/@{0,w}*$1)} -primitives3d[-1] 1 -opacity3d[-1] .1
 -endif
@@ -81,10 +81,10 @@ boundingbox3d : -skip ${1=10}
 -+3d
 -endl -done
 
-#@gmic rendervolume  : _size,_quality,_opacity
+#@gmic render_volume  : _size,_quality,_opacity
 #@gmic : Pseudo volumic rendering
 #@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -rendervolume
-rendervolume: -skip ${1=8},${2=5},${3=.1}
+rendervolumeold: -skip ${1=8},${2=5},${3=.1}
 -e[^-1] "Pseudo volumic rendering of image with size $1 quality $2 and opactiy $3"
 -v - -repeat @# -l[$>]
 -mirror x
@@ -95,7 +95,10 @@ rendervolume: -skip ${1=8},${2=5},${3=.1}
 -endl -done -rm[0] -+3d -md3d -1  -+3d {.5},{.5},{.5}
 -endl -done -v +
 
-rendervolume2: -skip ${1=8},${2=5},${3=.1}
+#@gmic render_volume  : _size,_quality,_opacity
+#@gmic : Pseudo volumic rendering
+#@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -render_volume
+render_volume: -check "${1=8}>3&${2=5}>2&${3=.1}>0"
 -v - -repeat @# -l[$>]
 -mirror x
 --tones {$2+1} -rm[1,2] -r[1--1] 100%,100%,100%,@{0,s} -*[1--1] [0] -rm[0]
@@ -110,21 +113,23 @@ rendervolume2: -skip ${1=8},${2=5},${3=.1}
 -+3d -md3d -1 -+3d {.5},{.5},{.5}
 -endl -done -v +
 
-#@gmic displayvolume : _size,_quality,_opacity
-#@gmic : Display the volume with black background, a bounding box and a volumic rendering of the data
-#@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -displayvolume 8,5,.1
-displayvolume: -skip ${1=8},${2=5},${3=.1}
+#@gmic display_volume : _size,_quality,_opacity
+#@gmic : Display the volume with black background, a bounding box
+#@gmic : and a volumic rendering of the data.
+#@gmic : $ 100,100,100 -noise 1 -blur 10,0 -max 0 -resize 100%,100%,100%,3,0 -n 0,100 -f 'if(c==0,z*i(x,y,z,0),if(c==1,i(x,y,z,0)*(100-z),0))' -display_volume 8,5,.1
+display_volume: -check "${1=8}>3&${2=5}>2&${3=.1}>0"
 -e[^-1] "display_volume with size $1 quality $2 and opactiy $3"
 -v -
 --boundingbox3d 20
--rendervolume2[0] $1,$2,$3
+-render_volume[0] $1,$2,$3
 -+3d
--background3d 0,0,0
 -v +
 
+d3d_black : 1 -d3d[0--2] [-1] -rm[-1]
+
 #@gmic view3d : _angle1,_angle2
-#@gmic : Apply a 3D view
-#@gmic : $ 50,50,50,3 -noise 10 -blur 5 -max 0 -n 0,255 -displayvolume 32,5,1 -view3d
+#@gmic : Apply a 3D view defined by two angles
+#@gmic : $ 50,50,50,3 -noise 10 -blur 5 -max 0 -n 0,255 -display_volume 32,5,1 -view3d
 view3d : -skip ${1=25},${2=-120}
 -e[^-1] "Apply 3D view"
 -v - -repeat @# -l[$>]
@@ -203,15 +208,6 @@ title:
 quiver2d:
 -e[^-1] "Cumulative sum along z-axis"
 -s z -repeat {@#/2} -l[$>,{$>+@#/2}] -quiver[0] [1] -endl -done -rm[{@#/2}--1] -a z
-
-#@gmic zcumsum
-#@gmic : Cumulative sum along z-axis
-#@gmic : $ 20,20,20 -noise 10 -zcumsum
-zcumsum:
--e[^-1] "Cumulative sum along z-axis"
--v - -repeat @# -l[$>]
--s z -repeat {@#-1} -+[{$>+1}] [$>] -done -a z
--v + -endl -done
 
 #@gmic warp2d :
 #@gmic : Warp a 2D image stack using a vector field
@@ -299,11 +295,12 @@ register_lucas_kanade :  -skip ${1=10},${2=10}
 #@gmic detect_events : _scale_xy,_scale_t,_threshold
 #@gmic : Detect space time events using space time interest points
 #@gmic : $ 100,100,100 -noise 1 -blur 2 --detectevents , -pointscoordinates[-1] -resize[0] 100%,100%,100%,3,1 -n[0] 0,255 -circles 5,.5,128,128,32 -k[0]
-detectevents : -skip ${1=1},${2=1},${3=9}
+detect_events : -skip ${1=1},${2=1},${3=9}
 -e[^-1] "detect events with scale_xy $1 scale_z $2 and threshold $3"
 -v - -repeat @# -l[$>]
 -blur_xy $1 -blur_z $2 -structuretensors -blur_xy $1 -blur_z $2
--s z -repeat @# -l[$>] -eigen -k[0] -s c -k[2] -endl -done -a z
+-s z -repeat @# -l[$>] -eigen -k[0] -s c -k[2] -endl -done -a z # for mem. usage
+-sqrt
 thres={@{0,ia}+$3*sqrt(@{0,iv})}
 --max_patch[0] 8 -threshold[0] $thres -*
 -endl -done -v +
@@ -360,7 +357,7 @@ smooth_moments: -check "${1=1}>0&${2=100}>0&${3=1}>0"
 pointscoordinates :
 -e[^-1] "return the list of points in the image"
 -v - -repeat @# -l[$>]
--pointcloud3d -s3d -k[2] -split y,{h/3} -a x
+-if {iM>0} -pointcloud3d -s3d -k[2] -split y,{h/3} -a x -else 0 -endif
 -endl -done -v +
 
 pair_distance:
@@ -385,26 +382,26 @@ circles : -skip ${1=10},${2=1},${3=255},${4=255},${5=255}
 -repeat {@{1,w}}
   -if {@{0,d}>1}
     x={@{1,i($>,0)}} y={@{1,i($>,1)}} z={@{1,i($>,2)}}
-    -repeat @{0,s} -sh[0] $z,$z,$> -ellipse[-1] $x,$y,$1,$1,0,$2,0xFFFFFF,$3 -rm[-1] -done
+    -repeat @{0,s} -sh[0] $z,$z,$> -ellipse[-1] $x,$y,$1,$1,0,$2,0xFFFFFF,$3,$4,$5 -rm[-1] -done
    -else
     x=@{1,i($>,0)} y=@{1,i($>,1)}
     -ellipse[0] $x,$y,$1,$1,0,$2,0xFFFFFF,$3,$4,$5
   -endif
 -done
 
-#@gmic addtext : _size,_color,_opacity
+#@gmic add_text : _size,_color,_opacity
 #@gmic : Add labels on image [0] at coordinates given by image [1]
-#@gmic : $ 256,256 -noise .1,2 --pointscoordinates -addtext 5 -rm[-1]
-addtext : -skip ${1=21},${2=128},${3=1}
+#@gmic : $ 256,256 -noise .1,2 --pointscoordinates -add_text 5 -rm[-1]
+add_text : -skip ${1=21},${2=1},${3=255}
 -e[^-1] "add text labels from @{1,w} points"
 -v -
 -repeat {@{1,w}}
   -if {@{0,d}>1}
     x={@{1,i($>,0)}} y={@{1,i($>,1)}} z={@{1,i($>,2)}} id={$>+1}
-    -repeat @{0,s} -sh[0] $z,$z,$> -text[-1] $id,$x,$y,21,$3,$2,$2,$2 -rm[-1] -done
+    -repeat @{0,s} -sh[0] $z,$z,$> -text[-1] $id,$x,$y,$1,$2,$3 -rm[-1] -done
   -else
     x=@{1,i($>,0)} y=@{1,i($>,1)} id={$>+1}
-    -text[0] $id,$x,$y,21,$3,$2,$2,$2
+    -text[0] $id,$x,$y,$1,$2,$3
   -endif
 -done
 
@@ -427,7 +424,7 @@ croparound :  -skip ${1=10},${2=10}
 #@gmic random_walks : width,height,length,number,speed
 #@gmic : Generate random walks tracks (list of coordinates x,y,t as a Nx3 image.)
 #@gmic : $ 100,100,20  -random_walks 100,100,20,5,1 -circles 1 -k[0] -blur_xy 1 -s z -max
-#@gmic : $ 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -displayvolume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0 -autocrop
+#@gmic : $ 100,100,20  -random_walks 100,100,20,10,1 -circles 1 -k[0] -blur 1 -n 0,255 -display_volume 8,10,1 -rotate3d 0,0,1,25 -rotate3d 1,0,0,-120 -snapshot3d 600,1,0,0,0 -autocrop
 random_walks :
 number=$4 width=$1 height=$2 length=$3 speed=$5
 $number,3
@@ -486,6 +483,22 @@ zmax :
 -s z -max
 -endl -done -v +
 
+#@gmic zmin
+#@gmic : maximum along z-axis
+zmin :
+-v - -repeat @# -l[$>]
+-s z -min
+-endl -done -v +
+
+#@gmic zcumsum
+#@gmic : Cumulative sum along z-axis
+#@gmic : $ 20,20,20 -noise 10 -zcumsum
+zcumsum:
+-e[^-1] "Cumulative sum along z-axis"
+-v - -repeat @# -l[$>]
+-s z -repeat {@#-1} -+[{$>+1}] [$>] -done -a z
+-v + -endl -done
+
 #@gmic kymoline:
 #@gmic : interactively select a line and extract a line profile
 kymoline:
@@ -517,7 +530,7 @@ whiten_frequency : -check "${1=.25}>=0"
 -endl -done -v +
 
 #@gmic deblur_goldmeinel2 : sigma>=0, _nb_iter>=0, _acceleration>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
-#@gmic : Deblur and zoom selected images using Gold-Meinel algorithm
+#@gmic : Deblur and zoom x2 selected images using Gold-Meinel algorithm
 #@gmic : Default values: 'nb_iter=8', 'acceleration=1' and 'kernel_type=1'.
 #@gmic : $ image.jpg --blur 1 --deblur_goldmeinel[-1] 1
 ###### : (contribution from Jérôme Boulanger).
@@ -530,6 +543,7 @@ deblur_goldmeinel2 : -check "$1>=0 && ${2=8}>=0 && ${3=1}>=0" -skip ${4=1} -skip
     -done -rm[0]
   -endl -done -v +
 
+
 #@gmic deblur_richardsonlucy2 : sigma>=0, nb_iter>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
 #@gmic : Deblur and zoom selected images using Richardson-Lucy algorithm.
 #@gmic : Default values: 'nb_iter=50' and 'kernel_type=1'.
@@ -540,6 +554,39 @@ deblur_richardsonlucy2 : -check "$1>=0 && ${2=50}>=0" -skip ${3=1} -skip ${4=1}
     -v - -repeat @# -l[$>]
     [0] -r[-1] 200%,200%,200%,100%,5 -repeat $2
     --b[-1] $1,1,{$3!=0} -r[-1] 50%,50%,50%,100%,5 --/[0,-1] -rm[-2] -r[-1] 200%,200%,200%,100%,5 -b[-1] $1,1,{$3!=0}  -*[-1,-2] # u *= H ( f / Hu )
+    -done -rm[0]
+  -endl -done -v +
+
+#@gmic deblur_richardsonlucy2sp : sigma>=0, nb_iter>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
+#@gmic : Deblur and zoom selected images using Richardson-Lucy algorithm.
+#@gmic : Default values: 'nb_iter=50' and 'kernel_type=1'.
+#@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
+###### : (contribution from Jérôme Boulanger).
+deblur_richardsonlucy2sp : -check "$1>=0 && ${2=50}>=0" -skip ${3=1} -skip ${4=1}
+  -e[^-1] "Deblur image$? using Richardson-Lucy algorithm, with sigma $1, $2 iterations and "@{-arg\ 1+!$3,"",quasi-}"gaussian kernel."
+    -v - -repeat @# -l[$>]
+    [0] a={ia} -r[-1] 200%,200%,200%,100%,5 -repeat $2
+    --b[-1] $1,1,{$3!=0} -r[-1] 50%,50%,50%,100%,5 --/[0,-1] -rm[-2] -r[-1] 200%,200%,200%,100%,5 -b[-1] $1,1,{$3!=0}  -*[-1,-2] # u *= H ( f / Hu )
+     --laplacian[-1] -*[-1] 0.1 -+[-1,-2] -threshold[-1] 1%,1 -*[-1] {$a/ia} -max 0 -w[-1]
+    -done -rm[0]
+  -endl -done -v +
+
+#@gmic deblur_richardsonlucy2sp : sigma>=0, nb_iter>=0, _kernel_type={ 0=quasi-gaussian (faster) | 1=gaussian }.
+#@gmic : Deblur and zoom selected images using Richardson-Lucy algorithm.
+#@gmic : Default values: 'nb_iter=50' and 'kernel_type=1'.
+#@gmic : $ image.jpg --blur 1 --deblur_richardsonlucy[-1] 1
+###### : (contribution from Jérôme Boulanger).
+deblur_richardsonlucysp : -check "$1>=0 && ${2=50}>=0" -skip ${3=1} -skip ${4=1}
+  -e[^-1] "Deblur image$? using Richardson-Lucy algorithm, with sigma $1, $2 iterations and "@{-arg\ 1+!$3,"",quasi-}"gaussian kernel."
+    -v - -repeat @# -l[$>]
+    [0] a={ia} -repeat $2
+    #--b[-1] $1,1,{$3!=0}  --/[0,-1] -rm[-2]  -b[-1] $1,1,{$3!=0}  -*[-1,-2] # u *= H ( f / Hu )
+    --b[-1] $1,1,{$3!=0} --[-1] [0] -*[-1] .25 --[-1,-2]
+    --iee[-1] -*[-1] 0.25 -+[-1,-2]
+    -threshold[-1] 10%,1 -* {$a/ia}
+    #--laplacian[-1]  -*[-1] .25 -d -+[-1,-2] -d
+    -max 0
+    -w[-1]
     -done -rm[0]
   -endl -done -v +
 
@@ -621,7 +668,7 @@ local_wiener : -skip ${1=2}
 -v - -repeat @# -l[$>]
 sigma=@{-noise_std}
 --blur $1 # mean
---local_variance[0] {2*$1} ---[-1] {$sigma*$sigma} -reverse[-1,-2] -/[-1,-2] # variance
+--local_variance[0] $1 ---[-1] {$sigma*$sigma} -reverse[-1,-2] -/[-1,-2] # variance
 ---[0,1] # img-mean
 -*[-1,-2] -+[-1,-2] -k[-1]
 -endl -done -v +
@@ -884,8 +931,8 @@ midway2:
  -mix_channels[0] $params  -n 0,255
 
 #@gmic vobs : _scale
-#@gmic : Motion quantity (Normal motion)  $ h * (|Ixy|^2 |It|/|Ixy|) / h * Ixy^2$
-#@gmic : Irani, Michal and Rousso, Benny and Peleg, Shmuel, Detecting and tracking multiple moving objects using temporal integration, ECCV'92, \href{http://dx.doi.org/10.1007/3-540-55426-2_33}{pdf}.
+#@gmic : Motion quantity (Normal motion)  h * (|Ixy|^2 |It|/|Ixy|) / h * Ixy^2
+#@gmic : Irani, Michal and Rousso, Benny and Peleg, Shmuel, Detecting and tracking multiple moving objects using temporal integration, ECCV'92.
 #@gmic : $ 100,100,10 -noise 1 -blur 1 --vobs
 vobs : -check "${1=1}>0 && ${2=3}>0"
 -e[^-1] "Motion quantity with scale $1"
@@ -954,6 +1001,12 @@ local_diffusion_coefficient : -check "${1=2}>0 && ${2=.5}>=0"
 ldc :
 -local_diffusion_coefficient $*
 
+ldc_residuals :
+--l[0] -s z -laplacian -a z -endl
+-gradient[0] z,1
+-*[1,2]
+-- -abs -blur 1
+
 #@gmic display_ldc :
 #@gmic : Display local diffusion coefficient
 #@gmic : $ 200,100 -noise .7,2 -blur 2,1,1 -repeat 20 --l[-1] --laplacian -*[-1] .05 -+ -endl -done  -a z -display_ldc
@@ -1017,7 +1070,7 @@ kpca: -skip ${2=20}
 
 #@gmic denoise_klt : _number_of_components
 #@gmic : denoise with karumen loeve transform
-#@gmic : $ image2.jpg --noise 10 --denoise_klt -print_psnr
+#@gmic : $ image2.jpg --noise 10 --denoise_klt[-1] 8 -print_psnr
 denoise_klt:
 -v - -repeat @# -l[$>]
   -split_tiles 64,64 oW=@{0,w} oH=@{0,h} oS=@{0,s}
@@ -1112,8 +1165,28 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
   -crop {$1+1},{$1+1},{$oW-$1-2},{$oH-$1-2}
 -endl -done -v +
 
+#@gmic denoise_nlm : _patch,_window,_bandwidth
+#@gmic : apply NLM denoising
+#@gmic : $ image.jpg --noise 10 -denoise_nlm[-1] , -print_psnr
+denoise_nlm: -skip ${1=4},${2=9},${3=7}
+-repeat @# -l[$>]
+  alpha={-1/max(.1,$3*@{-variance_noise})}
+  100%,100%,100%,100%,0 100%,100%,100%,100%,0 100%,100%,100%,100%,0
+  -repeat {2*$2+1} i={$>-$2-1} -repeat {2*$2+1} j={$>-$2-1}
+    -if {$i!=0||$j!=0}
+      # compute weight
+      --shift[0] $i,$j,0,0,2 ---[0,4]
+      -l[5] -sqr -blur $1 -* $alpha -exp -endl
+      # accumulate weights
+      -*[4] [5] -max[3] [5] -+[2,5] -+[1,4]
+    -endif
+  -done -done
+  -max[3] 1e-6
+  -*[0] [3] -+[1,0] -+[1,2] # add central patch
+  -/ # normalize
+-endl -done
 
-#@gmic iuwt: _nlevels>2,_spline>1
+#@gmic iuwt : _nlevels>2,_spline>1
 #@gmic : Compute the "isotropic undecimated wavelet transform" using
 #@gmic : a trou algorithm for the B3-Spline wavelet.
 #@gmic : The inverse is obtained as the sum of all coefficients
@@ -1177,19 +1250,17 @@ denoise_iuwt: -check "${1=1.4}>0&&${2=4}>2&&${3=3}>0"
 #@gmic : Default value _tolerance=.1
 #@gmic : $ image.jpg -norm -blur 1 -gt 50% --contour2d
 contour2d: -skip ${1=.1}
--v - -repeat @# -l[$>]
--f 'if(abs(i(x,y)-i(x+1,y+1))>$1||abs(i(x,y)-i(x+1,y))>$1,1,0)'
--endl -done -v +
+-v - -f 'if(abs(i-j(1,1))>$1||abs(i-j(1,0))>$1,1,0)' -v +
 
 #@gmic segment_snake : _nb_iter,_time_step,_lambda,_threshold,_smoothness
 #@gmic : Segment an image using an adaptation of Chan and Vese's method.
 #@gmic : Default values _nb_iter=10,_time_step=1,_smoothness=100,_threshold=50%
 #@gmic : Reference Chan and L. Vese,Active contours without edges, IEEE transactions on image processing 10(2) (2001), pp. 266-277
 #@gmic : $ 256,128 -text "GMIC",40,10,100,1,255 -blur 1 -noise 20 --segment_snake , -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -n 0,255 -blend add
-segment_snake: -skip ${1=10},${2=1},${3=100},${4=1},${5=1},${6=1}
+segment_snake: -skip ${1=100},${2=1},${3=.1},${4=.1},${5=10},${6=0}
 -e[^-1] "Segment the image using active contours without edges using $1 iterations and time step $2, smoothness $3 and initialize with threshold of $4."
 -v - -repeat @# -l[$>]
-  -luminance
+  -if {s>1} -luminance -endif
   --blur $5 -gt[-1] {ia+$4*sqrt(iv)}                                # initialization
   -l[-1] --distance 0 -negative[0] -distance[0] 0 -*[0] -1 -+ -endl # levelset
   -repeat $1
@@ -1205,8 +1276,9 @@ segment_snake: -skip ${1=10},${2=1},${3=100},${4=1},${5=1},${6=1}
     -*[-1] {$2/(0.0001+max(abs(@{-1,m}),abs(@{-1,M})))}           # adaptive time step
     -+[-2,-1]
     -if {$6==1} # if display
-    --l  -gt[1] 0 -contour2d[1] , -n 0,1 -a c -text $>,0,0,13,1,{iM} -w -wait 10  -rm -endl
+    --l -gt[1] 0 -contour2d[1] , -n 0,1 -a c -text $>,0,0,13,1,{iM} -w -wait 10  -rm -endl
     -endif
+    #-if {$>%10} -l[-1] -gt 0 --distance 0 -negative[0] -distance[0] 0 -*[0] -1 -+ -endl -endif
   -done
 #  -echo_stdout "("$M1","{sqrt($S1)}");("$M2", "{sqrt($S2)}")"
   -blur[-1] 1 -gt[-1] 0 -rm[0]
@@ -1306,7 +1378,7 @@ clearbluesky :
 #@gmic wavelength_color: _wavelength
 #@gmic : Convert a wavelength [380,780] to RGB color
 #@gmic : from http://scienceprimer.com
-#@gmic : $ image.jpg -luminance -wavelength_color 504
+#@gmic : $ 1,1,1,1,1 -repeat 100 --wavelength_color[0] {380+3*$>} -done -rm[0] -a x
 wavelength_color:
 -v -
 -if {$1>=380&$1<440}
@@ -1379,15 +1451,29 @@ jeje_denoise_patch_dict:
 jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
+#@gimp Smooth [NLM]: jeje_denoise_nlm, jeje_denoise_nlm_preview
+#@gimp : Scale = float(1,.5,10)
+#@gimp : Radius = int(4,3,13)
+#@gimp : Bandwidth = float(7,1,20)
+#@gimp : Channel(s) = choice("All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Green chrominance","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
+#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2014/12/12</i>.</small>")
+jeje_denoise_nlm:
+  -apply_channels "-denoise_nlm $1,$2,$3",$4,0
+
+jeje_denoise_nlm_preview:
+  -gimp_split_preview "-jeje_denoise_nlm $*",$-1
+
 #@gimp Smooth [Wiener] : jeje_local_wiener, jeje_local_wiener_preview
 #@gimp : Scale = float(2,.5,10)
+#@gimp : Channel(s) = choice("All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Green chrominance","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/06/07</i>.</small>")
 jeje_local_wiener :
--local_wiener $1 -c 0,255
+-apply_channels "-local_wiener $1",$2,0 -c 0,255
 
 jeje_local_wiener_preview:
--gimp_split_preview "-jeje_local_wiener $1",$-1
+-gimp_split_preview "-jeje_local_wiener $*",$-1
 
 #@gimp Smooth [IUWT] : jeje_denoise_iuwt,jeje_denoise_iuwt_preview
 #@gimp : Threshold = float(3,0,10)
@@ -1550,7 +1636,7 @@ jeje_render3d:
   -blend alpha
   -i $1 -a[1--1] z
   -l[-1]
-  -if $17 -displayvolume $2,$3,$4 -else  -boundingbox3d 20 -endif
+  -if $17 -display_volume $2,$3,$4 -else  -boundingbox3d 20 -endif
   -rotate3d 0,0,1,$7
   -rotate3d 0,1,0,$6
   -rotate3d 1,0,0,$5
