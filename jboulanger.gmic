@@ -37,7 +37,6 @@
 #  knowledge of the CeCILL license and that you accept its terms.
 #
 
-
 #---------------------------------
 #
 #@gmic :: Input/Output
@@ -630,15 +629,6 @@ deconvolve_goldmeinel : -check "${1=5}>=1&&${2=1}>=1"
     -done -rm[0,1]
   -endl -done -v +
 
-#@gmic normalize_sum
-#@gmic : Normalize the image so that the sum of the values is 1
-#@gmic : $ image.jpg --normalize_sum
-normalize_sum :
--e[^-1] "Normalize the image so that its sum is equal to 1."
--v - -repeat @# -l[$>]
- -* {1/(ia*w*h*d*s)}
--endl -done -v +
-
 #@gmic local_variance : _radius
 #@gmic : Local variance filter
 #@gmic : $ image.jpg  --local_variance
@@ -1032,7 +1022,7 @@ print_psnr : -skip ${1=255}
 #@gmic : Estimate the noise variance
 #@gmic : $ image.jpg -noise 10 sigma={round(@{-noise_std},.1)} -text_outline "Noise std:"$sigma,5,5,30,1
 noise_std :
--e[^-1] "Compute noise variance."
+-e[^-1] "Compute noise std."
 -v - --laplacian -if {@{0,d}==1}  -u {@{-mad[-1]}/sqrt(20.0)} -else -u {@{-mad[-1]}/sqrt(42.0)} -endif -rm[-1]
 -v +
 
@@ -1165,26 +1155,47 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
   -crop {$1+1},{$1+1},{$oW-$1-2},{$oH-$1-2}
 -endl -done -v +
 
-#@gmic denoise_nlm : _patch,_window,_bandwidth
+std_noise :
+  -v - --laplacian[-1] -u {@{-mad[-1]}/sqrt(if(d==1,20,42))} -rm[-1] -v +
+
+#@gmic denoise_nlm : _patch,_window,_bandwidth,_fast
 #@gmic : apply NLM denoising
+#@gmic : If banwidth<0, use an estimation of noise variance
 #@gmic : $ image.jpg --noise 10 -denoise_nlm[-1] , -print_psnr
-denoise_nlm: -skip ${1=4},${2=9},${3=7}
--repeat @# -l[$>]
-  alpha={-1/max(.1,$3*@{-variance_noise})}
+denoise_nlm: -skip ${1=4},${2=4},${3=-1},${4=0}
+-e[^-1] "Apply Non Local Mean denoising with patch $1 lookup $2 bandwidth $3"
+-v - -repeat @# -l[$>]
+  -if {$3<0}
+    alpha={-2/max(.1,-$3*(@{-std_noise})^2)}
+  -else
+    alpha={-2/max(.1,$3)}
+  -endif
   100%,100%,100%,100%,0 100%,100%,100%,100%,0 100%,100%,100%,100%,0
-  -repeat {2*$2+1} i={$>-$2-1} -repeat {2*$2+1} j={$>-$2-1}
-    -if {$i!=0||$j!=0}
-      # compute weight
-      --shift[0] $i,$j,0,0,2 ---[0,4]
-      -l[5] -sqr -blur $1 -* $alpha -exp -endl
-      # accumulate weights
-      -*[4] [5] -max[3] [5] -+[2,5] -+[1,4]
-    -endif
-  -done -done
+  -if {@{0,d}==1}
+    -repeat {2*$2+1} j={$>-$2-1} -repeat {2*$2+1} i={$>-$2-1}
+      -if {$i!=0||$j!=0}
+        # compute weight
+        --shift[0] $i,$j,0,0,2 ---[0,4]
+        -l[5] -sqr -blur $1 -if {$4==0} -* $alpha -exp -else -lt {-9/$alpha} -endif -endl
+        # accumulate weights
+        -*[4] [5] -max[3] [5] -+[2,5] -+[1,4]
+      -endif
+    -done -done
+  -else
+    -repeat {2*$2+1} k={$>-$2-1} -repeat {2*$2+1} j={$>-$2-1} -repeat {2*$2+1} i={$>-$2-1}
+      -if {$i!=0||$j!=0||$k!=0}
+        # compute weight
+        --shift[0] $i,$j,$k,0,2 ---[0,4]
+	-l[5] -sqr -blur $1 -if {$4==0} -* $alpha -exp -else -lt {-9/$alpha} -endif -endl
+        # accumulate weights
+        -*[4] [5] -max[3] [5] -+[2,5] -+[1,4]
+      -endif
+    -done -done -done
+  -endif
   -max[3] 1e-6
   -*[0] [3] -+[1,0] -+[1,2] # add central patch
   -/ # normalize
--endl -done
+-endl -done -v +
 
 #@gmic iuwt : _nlevels>2,_spline>1
 #@gmic : Compute the "isotropic undecimated wavelet transform" using
