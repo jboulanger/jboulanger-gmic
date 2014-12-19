@@ -132,7 +132,7 @@ d3d_black : 1 -d3d[0--2] [-1] -rm[-1]
 view3d : -skip ${1=25},${2=-120}
 -e[^-1] "Apply 3D view"
 -v - -repeat @# -l[$>]
--rotate3d 0,0,1,$1 -rotate3d 1,0,0,$2
+  -rotate3d 0,0,1,$1 -rotate3d 1,0,0,$2
 -endl -done -v +
 
 #@gmic colordepth
@@ -1168,7 +1168,7 @@ denoise_nlm: -skip ${1=4},${2=4},${3=-1},${4=0}
   -if {$3<0}
     alpha={-2/max(.1,-$3*(@{-std_noise})^2)}
   -else
-    alpha={-2/max(.1,$3)}
+    alpha={-2/max(.1,$3*$3)}
   -endif
   100%,100%,100%,100%,0 100%,100%,100%,100%,0 100%,100%,100%,100%,0
   -if {@{0,d}==1}
@@ -1465,10 +1465,11 @@ jeje_denoise_patch_dict_preview:
 #@gimp Smooth [NLM]: jeje_denoise_nlm, jeje_denoise_nlm_preview
 #@gimp : Scale = float(1,.5,10)
 #@gimp : Radius = int(4,3,13)
-#@gimp : Bandwidth = float(7,1,20)
+#@gimp : Strength = float(10,1,50)
+#@gimp : Fast = bool(0)
 #@gimp : Channel(s) = choice("All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Green chrominance","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2014/12/12</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2014/12/19</i>.</small>")
 jeje_denoise_nlm:
   -apply_channels "-denoise_nlm $1,$2,$3",$4,0
 
