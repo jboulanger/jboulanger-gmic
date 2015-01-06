@@ -629,13 +629,26 @@ deconvolve_goldmeinel : -check "${1=5}>=1&&${2=1}>=1"
     -done -rm[0,1]
   -endl -done -v +
 
-#@gmic local_variance : _radius
+#@gmic local_variance : _radius,_robust
 #@gmic : Local variance filter
 #@gmic : $ image.jpg  --local_variance
-local_variance: -skip ${1=2}
--e[^-1] "Local Variance filter with scale "$1
+local_variance: -skip ${1=2},${2=0}
+-e[^-1] "Estimate local variance with scale "$1" and robustness "$2
 -v - -repeat @# -l[$>]
+-if {$2==0}
  --blur $1,1,1 -- -sqr -blur $1,1,1
+-else
+ --median {2*$1+1} -- -abs -median {2*$1+1} -* 1.4826 -sqr
+-endif
+-endl -done -v +
+
+#@gmic local_noise_variance : _radius,_robust
+#@gmic : Local noise variance filter
+#@gmic : $ image.jpg  --local_variance
+local_noise_variance: -skip ${1=2},${2=0}
+-e[^-1] "Estimate local variance with scale "$1" and robustness "$2
+-v - -repeat @# -l[$>]
+-laplacian -if {d==1} -* {1/sqrt(20)} -else -* {1/sqrt(42)} -endif -local_variance $1,$2
 -endl -done -v +
 
 #@gmic normalize_local_variance : _amplitude,_radius,_threshold,_repeat
@@ -643,11 +656,12 @@ local_variance: -skip ${1=2}
 #@gmic : $ image.jpg  --normalize_local_variance
 normalize_local_variance: -skip ${1=50},${2=2},${3=25},${4=1}
   -e[^-1] "Normalize local variance with amplitude $1, scale $2, threshold $3 (x$4 times)."
-  -v -
+  -v -  -repeat @# -l[$>]
   -repeat $4
    --local_variance $2 -sqrt[-1] -max[-1] $3 # compute local standard deviation
    --blur[0] $2,1,1 ---[0,-1] -/[-1] [1] -*[-1] $1 -+[-2,-1] -k[-1] # x = <x> + alpha * (x-<x>)/<x'x>
-  -done -v +
+  -done
+-endl -done -v +
 
 #@gmic local_wiener : _radius
 #@gmic : Local Wiener filtering
@@ -1158,43 +1172,62 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
 std_noise :
   -v - --laplacian[-1] -u {@{-mad[-1]}/sqrt(if(d==1,20,42))} -rm[-1] -v +
 
-#@gmic denoise_nlm : _patch,_window,_bandwidth,_fast
-#@gmic : apply NLM denoising
-#@gmic : If banwidth<0, use an estimation of noise variance
-#@gmic : $ image.jpg --noise 10 -denoise_nlm[-1] , -print_psnr
-denoise_nlm: -skip ${1=4},${2=4},${3=-1},${4=0}
--e[^-1] "Apply Non Local Mean denoising with patch $1 lookup $2 bandwidth $3"
--v - -repeat @# -l[$>]
-  -if {$3<0}
-    alpha={-2/max(.1,-$3*(@{-std_noise})^2)}
-  -else
-    alpha={-2/max(.1,$3*$3)}
-  -endif
+#@gmic denoise_nlm_core: _reference_image,_scaling_map,_patch_radius,_spatial_bandwidth
+#@gmic : Apply non local means denoising using a image for weigth and a map for scaling
+#@gmic : $ image.jpg -noise 10 --luminance --local_noise_variance[0] 5,1 -f[-1] '-3.0/i' -denoise_nlm_core[0] [1],[2],6,6
+#@gmic : $ image.jpg -noise 10 --luminance --local_variance[0] 5,1 -f[-1] '-3.0/i' -denoise_nlm_core[0] [1],[2],6,6
+denoise_nlm_core:
+-e[^-1] "Apply Non Local Mean denoising with patch $3, spatial bandwidth $4 using weight images $1 and scaling map $2"
+-v - -pass$1 0 -pass$2 0
+-repeat {@#-2} -l[$>,-1,-2]
+# [0] original, [1] weights, [2] scaling
+# [3] sum(weights * patch), [4] sum(weights), [5] max(weights)
   100%,100%,100%,100%,0 100%,100%,100%,100%,0 100%,100%,100%,100%,0
   -if {@{0,d}==1}
-    -repeat {2*$2+1} j={$>-$2-1} -repeat {2*$2+1} i={$>-$2-1}
+    -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
       -if {$i!=0||$j!=0}
-        # compute weight
-        --shift[0] $i,$j,0,0,2 ---[0,4]
-        -l[5] -sqr -blur $1 -if {$4==0} -* $alpha -exp -else -lt {-9/$alpha} -endif -endl
+        # compute shifted images [6] and weight [7]
+        --shift[1] $i,$j,0,0,2 ---[1,6]
+        -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
         # accumulate weights
-        -*[4] [5] -max[3] [5] -+[2,5] -+[1,4]
+        -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
       -endif
     -done -done
   -else
-    -repeat {2*$2+1} k={$>-$2-1} -repeat {2*$2+1} j={$>-$2-1} -repeat {2*$2+1} i={$>-$2-1}
+    -repeat {2*$4+1} k={$>-$4-1} -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
       -if {$i!=0||$j!=0||$k!=0}
-        # compute weight
-        --shift[0] $i,$j,$k,0,2 ---[0,4]
-	-l[5] -sqr -blur $1 -if {$4==0} -* $alpha -exp -else -lt {-9/$alpha} -endif -endl
+        # compute shifted images [6] and weight [7]
+        --shift[1] $i,$j,0,0,2 ---[1,6]
+        -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
         # accumulate weights
-        -*[4] [5] -max[3] [5] -+[2,5] -+[1,4]
+        -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
       -endif
     -done -done -done
   -endif
-  -max[3] 1e-6
+  -max[5] 1e-6 -rm[1,2]
   -*[0] [3] -+[1,0] -+[1,2] # add central patch
   -/ # normalize
+-endl -done -v +
+
+#@gmic denoise_nlm : _patch_radius,_spatial_bandwidth,_tonal_bandwidth
+#@gmic : Apply non local means denoising
+#@gmic : The Patch is a gaussian function of std _patch_radius.
+#@gmic : The spatial kernel is a rectangle of radius _spatial_bandwidth.
+#@gmic : The tonal kernel is an exponential (exp(-d²/_tonal_bandwidth²))
+#@gmic : with d the euclidiean distance between image patches.
+#@gmic : For color images, the luminance is used.
+#@gmic : $ image.jpg --noise 10 -denoise_nlm[-1] 4,4,'{0.6*@{-std_noise}}' -print_psnr
+denoise_nlm: -check "${1=4}>0 && ${2=4}>0 && ${3=10}>0"
+-e[^-1] "Apply Non Local Mean denoising with patch $1, spatial bandwidth $2 and tonal bandwidth $3"
+-v - -repeat @# -l[$>]
+  # [1] preprocessed image used to compute weights
+  --l -s c -max -endl
+  # [2] compute a scaling
+  100%,100%,100%,100%,{-1.0/($3*$3)}
+  # apply the NLM denoising with image 1 and 2 as parameter
+  -denoise_nlm_core[0] [1],[2],$1,$2
+  # clean up
+  -rm[-1,-2]
 -endl -done -v +
 
 #@gmic iuwt : _nlevels>2,_spline>1
@@ -1463,15 +1496,18 @@ jeje_denoise_patch_dict_preview:
   -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
 
 #@gimp Smooth [NLM]: jeje_denoise_nlm, jeje_denoise_nlm_preview
-#@gimp : Scale = float(1,.5,10)
-#@gimp : Radius = int(4,3,13)
-#@gimp : Strength = float(10,1,50)
-#@gimp : Fast = bool(0)
+#@gimp : Patch size = float(4,.5,10)
+#@gimp : Spatial bandwidth = int(4,3,13)
+#@gimp : Tonal bandwidth = float(10,1,50)
 #@gimp : Channel(s) = choice("All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Green chrominance","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2014/12/19</i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2015/01/07</i>.</small>")
 jeje_denoise_nlm:
-  -apply_channels "-denoise_nlm $1,$2,$3",$4,0
+  -if {@{0,c}==1} # handle separatly gray scale images
+    -denoise_nlm $1,$2,$3
+  -else
+    -apply_channels "-denoise_nlm $1,$2,$3",$4,0
+  -endif
 
 jeje_denoise_nlm_preview:
   -gimp_split_preview "-jeje_denoise_nlm $*",$-1
