@@ -1182,12 +1182,12 @@ denoise_nlm_core:
 -repeat {@#-2} -l[$>,-1,-2]
 # [0] original, [1] weights, [2] scaling
 # [3] sum(weights * patch), [4] sum(weights), [5] max(weights)
-  100%,100%,100%,100%,0 100%,100%,100%,100%,0 100%,100%,100%,100%,0
+  100%,100%,100%,@{0,s},0 100%,100%,100%,@{1,s},0 100%,100%,100%,@{1,s},0
   -if {@{0,d}==1}
     -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
       -if {$i!=0||$j!=0}
         # compute shifted images [6] and weight [7]
-        --shift[1] $i,$j,0,0,2 ---[1,6]
+        --shift[0,1] $i,$j,0,0,2 --[7] [1]
         -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
         # accumulate weights
         -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
@@ -1197,7 +1197,7 @@ denoise_nlm_core:
     -repeat {2*$4+1} k={$>-$4-1} -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
       -if {$i!=0||$j!=0||$k!=0}
         # compute shifted images [6] and weight [7]
-        --shift[1] $i,$j,0,0,2 ---[1,6]
+        --shift[0,1] $i,$j,0,0,2 --[7] [1]
         -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
         # accumulate weights
         -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
@@ -1221,7 +1221,7 @@ denoise_nlm: -check "${1=4}>0 && ${2=4}>0 && ${3=10}>0"
 -e[^-1] "Apply Non Local Mean denoising with patch $1, spatial bandwidth $2 and tonal bandwidth $3"
 -v - -repeat @# -l[$>]
   # [1] preprocessed image used to compute weights
-  --l -s c -max -endl
+  --luminance
   # [2] compute a scaling
   100%,100%,100%,100%,{-1.0/($3*$3)}
   # apply the NLM denoising with image 1 and 2 as parameter
