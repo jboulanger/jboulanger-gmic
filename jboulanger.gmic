@@ -1172,64 +1172,6 @@ denoise_patch_dict: -skip ${1=8},${2=8},${3=1.1},${4=1.1}
 std_noise :
   -v - --laplacian[-1] -u {@{-mad[-1]}/sqrt(if(d==1,20,42))} -rm[-1] -v +
 
-#@gmic nlmeans_core: _reference_image,_scaling_map,_patch_radius,_spatial_bandwidth
-#@gmic : Apply non local means denoising using a image for weigth and a map for scaling
-#@gmic : $ image.jpg -noise 10 --luminance --local_noise_variance[0] 5,1 -f[-1] '-3.0/i' -nlmeans_core[0] [1],[2],6,6
-#@gmic : $ image.jpg -noise 10 --luminance --local_variance[0] 5,1 -f[-1] '-3.0/i' -nlmeans_core[0] [1],[2],6,6
-nlmeans_core:
--e[^-1] "Apply Non Local Mean denoising with patch $3, spatial bandwidth $4 using weight images $1 and scaling map $2"
--v - -pass$1 0 -pass$2 0
--repeat {@#-2} -l[$>,-1,-2]
-# [0] original, [1] weights, [2] scaling
-# [3] sum(weights * patch), [4] sum(weights), [5] max(weights)
-  100%,100%,100%,@{0,s},0 100%,100%,100%,@{1,s},0 100%,100%,100%,@{1,s},0
-  -if {@{0,d}==1}
-    -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
-      -if {$i!=0||$j!=0}
-        # compute shifted images [6] and weight [7]
-        --shift[0,1] $i,$j,0,0,2 --[7] [1]
-        -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
-        # accumulate weights
-        -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
-      -endif
-    -done -done
-  -else
-    -repeat {2*$4+1} k={$>-$4-1} -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
-      -if {$i!=0||$j!=0||$k!=0}
-        # compute shifted images [6] and weight [7]
-        --shift[0,1] $i,$j,0,0,2 --[7] [1]
-        -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
-        # accumulate weights
-        -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
-      -endif
-    -done -done -done
-  -endif
-  -max[5] 1e-6 -rm[1,2]
-  -*[0] [3] -+[1,0] -+[1,2] # add central patch
-  -/ # normalize
--endl -done -v +
-
-#@gmic nlmeans : _patch_radius,_spatial_bandwidth,_tonal_bandwidth
-#@gmic : Apply non local means denoising of Buades et al, 2005.
-#@gmic : The patch is a gaussian function of std _patch_radius.
-#@gmic : The spatial kernel is a rectangle of radius _spatial_bandwidth.
-#@gmic : The tonal kernel is exponential (exp(-d²/_tonal_bandwidth²))
-#@gmic : with d the euclidiean distance between image patches.
-#@gmic : For color images, the luminance is used for computing d.
-#@gmic : $ image.jpg --noise 10 -nlmeans[-1] 4,4,'{0.6*@{-std_noise}}' -print_psnr
-nlmeans: -check "${1=4}>0 && ${2=4}>0 && ${3=10}>0"
--e[^-1] "Apply Non Local Mean denoising with patch $1, spatial bandwidth $2 and tonal bandwidth $3"
--v - -repeat @# -l[$>]
-  # [1] preprocessed image used to compute weights
-  --luminance
-  # [2] compute a scaling
-  100%,100%,100%,100%,{-1.0/($3*$3)}
-  # apply the NLM denoising with image 1 and 2 as parameter
-  -nlmeans_core[0] [1],[2],$1,$2
-  # clean up
-  -rm[-1,-2]
--endl -done -v +
-
 #@gmic iuwt : _nlevels>2,_spline>1
 #@gmic : Compute the "isotropic undecimated wavelet transform" using
 #@gmic : a trou algorithm for the B3-Spline wavelet.
@@ -1491,26 +1433,6 @@ jeje_whiten_frequency_preview :
 jeje_denoise_patch_dict:
   --denoise_patch_dict {2^($1+2)},$2,$3,$4
   -*[0] $5 -*[1] {1-$5} -+ -c 0,255
-
-jeje_denoise_patch_dict_preview:
-  -gimp_split_preview "-jeje_denoise_patch_dict $*",$-1
-
-#@gimp Smooth [NLMeans]: jeje_nlmeans, jeje_nlmeans_preview
-#@gimp : Patch size = float(4,.5,10)
-#@gimp : Spatial bandwidth = int(4,3,13)
-#@gimp : Tonal bandwidth = float(10,1,50)
-#@gimp : Channel(s) = choice("All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Green chrominance","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
-#@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>.      Latest update: <i>2015/01/07</i>.</small>")
-jeje_nlmeans:
-  -if {@{0,c}==1} # handle separatly gray scale images
-    -nlmeans $1,$2,$3
-  -else
-    -apply_channels "-nlmeans $1,$2,$3",$4,0
-  -endif
-
-jeje_nlmeans_preview:
-  -gimp_split_preview "-jeje_nlmeans $*",$-1
 
 #@gimp Smooth [Wiener] : jeje_local_wiener, jeje_local_wiener_preview
 #@gimp : Scale = float(2,.5,10)
