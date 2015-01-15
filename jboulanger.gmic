@@ -1225,6 +1225,57 @@ denoise_iuwt: -check "${1=1.4}>0&&${2=4}>2&&${3=3}>0"
     -rm[0]
   -endl -done  -v +
 
+#@gmic nlmeans_core: _reference_image,_scaling_map,_patch_radius>0,_spatial_bandwidth>0
+#@gmic : Apply non local means denoising using a image for weigth and a map for scaling
+#@gmic : $ image.jpg -noise 10 --luminance --local_noise_variance[0] 5,1 -f[-1] '-3.0/i' -nlmeans_core[0] [1],[2],6,6
+#@gmic : $ image.jpg -noise 10 --luminance --local_variance[0] 5,1 -f[-1] '-3.0/i' -nlmeans_core[0] [1],[2],6,6
+safir_core: -check @{-is_image_arg\ $1}" && "@{-is_image_arg\ $2}" && $3>0 && $4>0"
+  -e[^-1] "Apply non-local means denoising using weight images $1, scaling map $2, patch size $3 and spatial bandwidth $4."
+  -v - -pass$1 0 -pass$2 0
+  -repeat {@#-2} -l[$>,-1,-2]
+    # [0] original, [1] weights, [2] variance
+    # [3] sum(weights * patch),  [4] sum(weights2 * variance),
+    # [5] sum(weights),          [6] max(weights)
+    100%,100%,100%,@{0,s},0 100%,100%,100%,@{1,s},0
+    100%,100%,100%,@{1,s},0 100%,100%,100%,@{1,s},0
+    -if {@{0,d}==1}
+      -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
+        -if {$i!=0||$j!=0}
+          # Compute shifted images [7] and weight [8]
+          --shift[0,1] $i,$j,0,0,2 --[8] [1]
+          -sqr[8] -blur[8] $3 -*[8] [2] -exp[7]
+          # Accumulate weights
+          -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
+        -endif
+      -done -done
+    -else
+      -repeat {2*$4+1} k={$>-$4-1} -repeat {2*$4+1} j={$>-$4-1} -repeat {2*$4+1} i={$>-$4-1}
+        -if {$i!=0||$j!=0||$k!=0}
+          # Compute shifted images [6] and weight [7]
+          --shift[0,1] $i,$j,0,0,2 --[7] [1]
+          -sqr[7] -blur[7] $3 -*[7] [2] -exp[7]
+          # Accumulate weights
+          -*[6] [7] -max[5] [7] -+[4,7] -+[3,6]
+        -endif
+      -done -done -done
+    -endif
+    -max[5] 1e-6 -rm[1,2]
+    -*[0] [3] -+[1,0] -+[1,2] # Add central patch.
+    -/ # Normalize.
+  -endl -done -v +
+
+safir: -check "${1=4}>0 && ${2=4}>0 && ${3=10}>0"
+  -e[^-1] "Apply safir denoising with patch size $1, spatial bandwidth $2 and tonal bandwidth $3."
+  -v - -repeat @# -l[$>]
+    # [1] preprocessed image used to compute weights.
+    --luminance
+    # [2] compute a variance
+    --local_noise_variance 5
+    # Apply the NLM denoising with image 1 and 2 as parameter.
+    -safir_core[0] [1],[2],$1,$2
+    -rm[-1,-2] # Clean up.
+  -endl -done -v +
+
 #---------------------------------
 #
 #@gmic :: Segmentation
@@ -1310,6 +1361,30 @@ periodic_dots : -skip ${1=6},${2=4},${3=.5}
  -resize[-1] [0],0
  -k[-1]
  -endl -done -a c
+-endl -done -v +
+
+#@gmic turing_pattern : iter,dt,a,b,q,r,D
+#@gmic : Generate Turing pattern using a rection-diffusion equation
+#@gmic : du/dt = au(1-qv²) + v(1-ru)
+#@gmic : dv/dt =  v(b-aquv) + u(-a+rv)
+#@gmic : the two parameters q and r are dictating the pattern final shape
+#@gmic : the diffusivity parameter influcences the scale
+#@gmic : http://www.dna.caltech.edu/courses/cs191/paperscs191/turing.pdf
+#@gmic : http://eprints.maths.ox.ac.uk/430/1/102.pdf
+turing_pattern: -skip ${1=2000},${2=.1},${3=0.899},${4=-0.91},${5=2},${6=.1},${7=.5},${8=0}
+-v - -repeat @# -l[$>]
+-r 100%,100%,100%,2 -f 0 -noise 1 -blur 1 -n 0,1
+-repeat $1
+-progress {$>/$1*100}
+--laplacian[0] -mix_channels[-1] ($7,0;0,1)
+--f[0] 'u=i(x,y,z,0);v=i(x,y,z,1);a=$3;b=$4;q=$5;r=$6;if(c==0,a*u*(1-q*v*v)+v*(1-r*u),v*(b+a*q*u*v)+u*(-a+r*v))'
+-+[-1,-2]
+-*[-1] {$2/(0.01+max(abs(im),abs(iM)))}
+-+
+-if {$8==1} --l -s c -n 0,1 -a c -text $> -w -rm -endl -endif
+#--l -s c -w1[0] -w2[1] -rm -endl
+-done
+-s c -n 0,1 -a c
 -endl -done -v +
 
 #@gmic rays : _center_x,_center_y,_scale,_phase
@@ -1509,6 +1584,25 @@ jeje_periodic_dots:
 
 jeje_periodic_dots_preview:
   -jeje_periodic_dots $*
+
+#@gimp Turing : jeje_turing_pattern
+#@gimp : Scale = float(1,0,1)
+#@gimp : Iterations = int(2000,1,10000)
+#@gimp : Time step = float(.1,.01,1)
+#@gimp : alpha = float(.899,0,2)
+#@gimp : beta = float(-.91,-2,2)
+#@gimp : q = float(2,0,3)
+#@gimp : r = float(.1,0,3)
+#@gimp : Diffusivity = float(.25,.01,.6)
+#@gimp : sep = separator(), note = note(<small>Generate turing pattern using a system of coupled reaction/diffusion equations. The patterns can change from line to spots like structures depending on the parameters. http://en.wikipedia.org/wiki/The_Chemical_Basis_of_Morphogenesis</small>), note=note(<small>Since the computation is long there is no preview. </small>)
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2015/01/16</i>.</small>")
+jeje_turing_pattern:
+  --l
+    -r {$1*w},{$1*h},1,2
+    -turing_pattern $2,$3,$4,$5,$6,$7,$8
+  -endl
+  -r[1] 100%,100%,100%,3,0 -r[1] [0],5 -rm[0] -blur .75 -n 0,255
+
 
 #@gimp Clouds : jeje_clouds, jeje_clouds_preview
 #@gimp : Density = float(50,0,100)
