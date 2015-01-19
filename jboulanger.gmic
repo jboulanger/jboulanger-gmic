@@ -1585,7 +1585,7 @@ jeje_periodic_dots:
 jeje_periodic_dots_preview:
   -jeje_periodic_dots $*
 
-#@gimp Turing : jeje_turing_pattern
+#@gimp Turing : jeje_turing_pattern,gimp_no_preview
 #@gimp : Scale = float(1,0,1)
 #@gimp : Iterations = int(2000,1,10000)
 #@gimp : Time step = float(.1,.01,1)
@@ -1594,7 +1594,7 @@ jeje_periodic_dots_preview:
 #@gimp : q = float(2,0,3)
 #@gimp : r = float(.1,0,3)
 #@gimp : Diffusivity = float(.25,.01,.6)
-#@gimp : sep = separator(), note = note(<small>Generate turing pattern using a system of coupled reaction/diffusion equations. The patterns can change from line to spots like structures depending on the parameters. http://en.wikipedia.org/wiki/The_Chemical_Basis_of_Morphogenesis</small>), note=note(<small>Since the computation is long there is no preview. </small>)
+#@gimp : sep = separator(), note = note(<small>Generate turing pattern using a system of coupled reaction/diffusion equations. The patterns can change from line to spots like structures depending on the parameters. You may use the 'Stencil' filter to achieve similar effects. http://en.wikipedia.org/wiki/The_Chemical_Basis_of_Morphogenesis</small>), note=note(<small>Since the computation is long there is no preview. </small>)
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2015/01/16</i>.</small>")
 jeje_turing_pattern:
   --l
