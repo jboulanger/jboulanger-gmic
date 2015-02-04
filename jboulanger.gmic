@@ -1671,7 +1671,7 @@ jeje_normalize_local_variance_preview:
 #@gimp : Cut = bool(1)
 #@gimp : Channel(s) = choice(3,"All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Alpha","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
-#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/12/16/i>.</small>")
+#@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/12/16</i>.</small>")
 jeje_spotify:
  -apply_channels "-spotify $1,$2 -if $3 -c 0,255 -else -n 0,255 -endif",$4,0
 
