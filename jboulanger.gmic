@@ -1667,7 +1667,7 @@ jeje_normalize_local_variance_preview:
 
 #@gimp Spotify : jeje_spotify,jeje_spotify_preview
 #@gimp : Scale = float(1,0.75,10)
-#@gimp : Iteration = int(1,0,10)
+#@gimp : Iteration = int(1,1,10)
 #@gimp : Cut = bool(1)
 #@gimp : Channel(s) = choice(3,"All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Alpha","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
