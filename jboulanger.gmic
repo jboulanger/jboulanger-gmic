@@ -212,7 +212,7 @@ quiver2d:
 #@gmic : Warp a 2D image stack using a vector field
 #@gmic : $ movie.cimg  -a z -resize 50%,50% --l[0] --lucas_kanade 5,1 -zcumsum[-1] -frame 30,30,0 -warp2d -endl -frame[0] 30,30,0 -a x
 warp2d:
--s z -repeat {@#/2} -l[$>,{$>+@#/2}] -warp[0] [1],1,1,2 -endl -done -rm[{@#/2}--1] -a z
+-s z -repeat {@#/2} -l[$>,{$>+@#/2}] -warp[0] [1],1,1,1 -endl -done -rm[{@#/2}--1] -a z
 
 #@gmic lucas_kanade: _scale
 #@gmic : Motion estimation using lucas and kanade approach
@@ -223,11 +223,30 @@ warp2d:
 lucas_kanade: -skip ${1=2},${2=1}
 -e[^-1] "Motion estimation with Lucas et Kanade algorithm"
 -v - -repeat @# -l[$>]
--blur_xy $2 -structuretensors 0 -blur_xy $1 # abcdef
+-blur_xy $2 -structuretensors 0 -blur_xy $1,$1,0 # abcdef
 --l -s c -rm[0,-1] -*[1,2] -*[0,2] -reverse -- -endl  # dc-be
 --l[0] -s c -rm[3,5] -*[0,3] -*[1,2] -- -endl # ae-bc
 -l[0] -s c -rm[2,4,5] -*[0,2] -sqr[1] -- -endl # ad-b2
 -/[1,2] [0]  -rm[0] -a c
+-endl -done -v +
+
+#@gmic unwarp : _iteration,_smoothness,is_multi_scale
+#@gmic : Unwarp a 2D+T volume using a motion estimation
+#@gmic : $ image.jpg -repeat 20 --shift[-1] 1,0,0,0,2 -done -a z -unwarp 10,20
+unwarp: -skip ${3=1}
+-e[^-1] "Unwarp an 2d+t volume"
+-v - -repeat @# -l[$>]
+[0] 100%,100%,100%,2,0
+-repeat $1
+  -if {$3==0} s=1 -else  s={($>+1)/$1} -endif  scale={$s*100}%
+  #-echo_stdout $s" "$scale" "{1/$s}" "{$2*$s}
+  --l[1]
+    -luminance -r $scale,$scale,100%,1,2 -lucas_kanade {max(.75,$2*$s)}
+    -* {1/$s} -zcumsum
+  -endl
+  -r[-1] [-2],5  -+[-1,-2]
+  --l[0,-1] -warp2d -endl -rm[1] -reverse[-1,-2]
+-done -rm[0,2]
 -endl -done -v +
 
 #@gmic estimate_shift
@@ -271,7 +290,7 @@ estimate_shift_mr: -skip ${1=2}
 #@gmic : $ image.jpg  -luminance -repeat  10 --shift[-1] {2*?},{2*?},0,0,2 -done -a z --unshift 20 -a x
 unshift: -skip ${1=10}
 -e[^-1] "unshift image stack"
--repeat @# -l[$>]
+-v - -repeat @# -l[$>]
 -repeat $1
 -s z -repeat {@#-1} -l[$>,{$>+1}]
 --estimate_shift_mr 5 -*[-1] -1 vx=@{2,i(0)} vy=@{2,i(0,1)}
@@ -280,7 +299,7 @@ unshift: -skip ${1=10}
 -warp[1] [-1],1,2,1 -rm[-1,-2]
 -endl -done -a z
 -done
--endl -done
+-endl -done -v +
 
 #@gmic register_lucas_kanade : _iterations, _scale
 #@gmic : Register images using lucas kanade motion estimation
