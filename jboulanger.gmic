@@ -249,55 +249,68 @@ unwarp: -skip ${3=1}
 -done -rm[0,2]
 -endl -done -v +
 
-#@gmic estimate_shift
-#@gmic : Estimate a translation between two images with sub-pixel accuray
-#@gmic : image.jpg  -luminance --shift {?},{?},0,0,2 -estimate_shift
-estimate_shift:
+#@gmic estimate_shift_core [image]
+#@gmic : Estimate a translation with a reference images with sub-pixel accuray
+#@gmic : image.jpg  -luminance --shift {?},{?},0,0,2 -estimate_shift[1] [0]
+estimate_shift_core:
 -e[^-1] "Translation estimation with Lucas et Kanade algorithm"
--v - -repeat {@#-1} -l[$>,{$>+1}]
-  --min -norm[-1] -gt[-1] 1 -erode[-1] 5
-  -l[0,1]  -blur_xy 1 --gradient[0] xy,0 --[0,1] --sqr[1,2] --*[1,2] [0] -*[1,2] -rm[0] -endl
-  -*[0--2] [-1] -rm[-1]
+-v - -pass$1 0 -repeat {@#-1} -l[$>,-1]
+  -blur_xy 1 --gradient[0] xy,0 --[0,1] --sqr[1,2] --*[1,2] [0] -*[1,2] -rm[0]
   Ixy=@{0,ia} Ixx=@{1,ia} Iyy=@{2,ia} Ixt=@{3,ia} Iyt=@{4,ia}
-  vx={($Iyy*$Ixt-$Ixy*$Iyt)/($Ixx*$Iyy-$Ixy*$Ixy)}
-  vy={($Ixx*$Iyt-$Ixy*$Ixt)/($Ixx*$Iyy-$Ixy*$Ixy)}
-  #-echo_stdout $vx,$vy
-  -rm 1,2 -f $vx,$vy
+  vx={-($Iyy*$Ixt-$Ixy*$Iyt)/($Ixx*$Iyy-$Ixy*$Ixy)}
+  vy={-($Ixx*$Iyt-$Ixy*$Ixt)/($Ixx*$Iyy-$Ixy*$Ixy)}
+  -rm 1,2,1,1,$vx,$vy
 -endl -done -v +
 
 #@gmic multi_resolution_pyramide : _number_of_scales
 #@gmic : Build a multi-resolution pyramid
 multi_resolution_pyramide:
 -v - -repeat @# -l[$<]
-  -repeat {$1-1} --resize[-1] 50%,50%,50%,100%,5 -done -reverse
+  -repeat {$1-1} --resize[-1] 50%,50%,50%,100%,2 -done -reverse
 -endl -done -v +
 
-#@gmic estimate_shift_mr
-#@gmic : Estimate a translations between two images with sub-pixel accuray
+#@gmic shift_subpixel : [image]
+#@gmic : Shift an image with subpixel translation
+#@gmic : $ image.jpg 1,2,1,1,5,10.1 --shift_subpixel[0] [1]
+shift_subpixel :
+-v - -pass$1 0 -repeat {@#-1} -l[$>,-1]
+   @{0,w},@{0,h},1,2 -f[-1] 'if(c==0,@{1,i(0)},@{1,i(0,1)})'
+   -warp[0] [2],1,2,1 -rm[1,2]
+-endl -done -v +
+
+#@gmic estimate_shift [image]
+#@gmic : Estimate a translations between image and ref image [image]
 #@gmic : using a multi-resolution scheme
-#@gmic : $ image.jpg -luminance --shift 2,3 -crop 5%,5%,95%,95% -estimate_shift_mr 3
-estimate_shift_mr: -skip ${1=2}
--multi_resolution_pyramide $1
-1,2
--repeat {$1-1}
-  --estimate_shift[$>,{$1+$>}] -*[-1,-2] -2 -+[-1,-2]
-  @{{$>+1},w},@{{$>+1},h},1,2 -f[-1] 'if(c==0,@{-2,i(0)},@{-2,i(0,1)})'
-  -warp[{$1+$>+1}] [-1],1,2,1 -rm[-1] -*[-1] -1
--done
--k[-1]
+#@gmic : $ image.jpg -luminance --shift 2,3 -crop 5%,5%,95%,95% -estimate_shift[1] [0],3
+estimate_shift:
+-e[^-1] "Estimate translation between images and image [$1]"
+-v - -pass$1 0 -repeat {@#-1} -l[$>,-1]
+  N={round(log2(min(@{0,w},@{0,h}))-2,1,-1)}
+  -multi_resolution_pyramide $N
+  1,2
+  -repeat 3 -repeat $N
+    # shift at current scale
+    --*[-1] {-2.0^(-($N-$>-1))} --shift_subpixel[{$N+$>}] [-1] -rm[-2]
+    # compute new correction
+    -estimate_shift_core[-1] [$>]
+    # convert correction to image scale
+    -*[-1] {2.0^($N-$>-1)}
+    # add the correction
+    -+[-1,-2]
+  -done -done
+ -k[-1] -*[-1] -1
+-endl -done -v +
 
 #@gmic unshift : iterations,number_of_scales
 #@gmic : Correct drift along Z in a 3D volume (video stabilization)
-#@gmic : Use the linearized optical flow constraint iteratively
-#@gmic : $ image.jpg  -luminance -repeat  10 --shift[-1] {2*?},{2*?},0,0,2 -done -a z --unshift 20 -a x
-unshift: -skip ${1=10},${2=5}
+#@gmic : $ image.jpg  -luminance -repeat  10 --shift[-1] {2*?},{2*?},0,0,2 -done -a z --unshift 1 -a x
+unshift: -skip ${1=1}
 -e[^-1] "unshift image stack"
 -v - -repeat @# -l[$>]
   -repeat $1
     -s z -repeat {@#-1} -l[$>,{$>+1}]
-    --estimate_shift_mr $2 -*[-1] -1 vx=@{2,i(0)} vy=@{2,i(0,1)}
-    @{0,w},@{0,h} -f[-1] $vx --f[-1] $vy -a[-1,-2] c
-    -warp[1] [-1],1,2,1 -rm[-1,-2]
+      --estimate_shift[1] [0] -*[-1] -1
+      -shift_subpixel[1] [-1] -rm[-1]
     -endl -done -a z
   -done
 -endl -done -v +
@@ -305,7 +318,7 @@ unshift: -skip ${1=10},${2=5}
 #@gmic register_lucas_kanade : _iterations, _scale
 #@gmic : Register images using lucas kanade motion estimation
 #@gmic : $ movie.cimg -luminance -resize 50%,50% -a z -register_lucas_kanade 5,10
-register_lucas_kanade :  -skip ${1=10},${2=10}
+register_lucas_kanade : -skip ${1=10},${2=10}
 --lucas_kanade $2 -zcumsum[-1] --warp2d
 -repeat $1
 -lucas_kanade[-1] $2 -zcumsum[-1] -+[-1,-2] --warp2d
@@ -330,9 +343,8 @@ thres={@{0,ia}+$3*sqrt(@{0,iv})}
 detect_spots : -skip ${1=1},${2=4}
 -e[^-1] "detect events with scale $1 and threshold $2"
 -v - -repeat @# -l[$>]
--blur $1 --blur $1 --
-thres={$2*@{-mad[0]}}
---max_patch[0] 3 --threshold[0] $thres -*
+  -blur $1 --blur $1 -- thres={$2*@{-mad[0]}}
+  --max_patch[0] 3 --threshold[0] $thres -*
 -endl -done -v +
 
 #@gmic local_moments : _scale
@@ -515,7 +527,7 @@ zmin :
 zcumsum:
 -e[^-1] "Cumulative sum along z-axis"
 -v - -repeat @# -l[$>]
--s z -repeat {@#-1} -+[{$>+1}] [$>] -done -a z
+  -s z -repeat {@#-1} -+[{$>+1}] [$>] -done -a z
 -v + -endl -done
 
 #@gmic kymoline:
@@ -610,44 +622,64 @@ deblur_richardsonlucysp : -check "$1>=0 && ${2=50}>=0" -skip ${3=1} -skip ${4=1}
   -endl -done -v +
 
 #@gmic correlate_fft
-#@gmic : Convolve selected images two-by-two through fourier transforms.
-#@gmic : $ image.jpg 100%,100% -gaussian[-1] 20,1,45 --convolve_fft
+#@gmic : Convolve selected images with image [$1]
+#@gmic : $ image.jpg 100%,100% -gaussian[-1] 20,1,45 --correlate_fft[0] [1]
 correlate_fft :
-  -e[^-1] "Correlate image$? two-by-two through fourier transforms."
-  -v - -repeat {int(@#/2)} -l[$>,{$>+1}]
+  -e[^-1] "Correlate image with image [$1]"
+  -v - -pass$1 0 -repeat {@#-1} -l[$>,-1]
     w2={int(@{0,w}/2)} h2={int(@{0,h}/2)} d2={int(@{0,d}/2)}
-    -r[1] [0],[0],[0],1,0,0,0.5,0.5,0.5,0.5 -shift[1] -$w2,-$h2,-$d2,0,2
-    -fft[0] -fft[2] -*[1] -1
+    -r[1] [0],[0],[0],1,0,0,0.5,0.5,0.5,0.5  -shift[1] -$w2,-$h2,-$d2,0,2
+    -fft[0] -fft[2] -*[3] -1
     --*[-4] [-1] --*[-4] [-3] -+[-2,-1]
     -*[-5,-3] -*[-3,-2] --[-3,-2]
     -ifft -rm[-1]
   -endl -done -v +
 
-#@gmic deconvolve_richardsonlucy : nb_iter>=0,
+#@gmic deconvolve_richardsonlucy : filter, nb_iter>=0
 #@gmic : deconvolve images using the first one as a blur operator (PSF)
-#@gmic : $ image.jpg 100%,100% -gaussian[-1] 3,1,45 -normalize_sum[-1] --convolve_fft --deconvolve_richardsonlucy[1,2] 10 -print_psnr[0,2,3]
-deconvolve_richardsonlucy : -check "${1=5}>=1"
- -e[^-1] "Deblur image$? using Richardson-Lucy algorithm with a custom filter."
- -v -
- -repeat {@#-1} -l[0,{$>+1}]
- -r[0] @{1,w},@{1,h},@{1,d},100%,0,0,.5,.5,.5 -normalize_sum[0]
- [1] -repeat $1
- --convolve_fft[0,-1] --/[1,-1] -rm[-2] --correlate_fft[0,-1] -rm[-2] -*[-1,-2]
- -done -rm[0,1]
+#@gmic : $ image.jpg 16,16 -gaussian[-1] 2,1,45 --convolve_fft[0] [1] -deconvolve_richardsonlucy[-1] [1],100
+deconvolve_richardsonlucy : -check @{-is_image_arg\ $1}" && ${2=5}>=1"
+ -e[^-1] "Deblur image using Richardson-Lucy algorithm with filter [$1]."
+ -v - -pass$1 0
+ -repeat {@#-1} -l[$>,-1]
+   -r[1] @{0,w},@{0,h},@{0,d},100%,0,0,.5,.5,.5 -normalize_sum[1] [0]
+   -repeat $2
+     --convolve_fft[-1] [1] -max[-1] 1e-6 --/[0,-1] -rm[-2]
+     -correlate_fft[-1] [1] -*[-1,-2]  # u *= H ( f / Hu )
+   -done -rm[0,1]
  -endl -done -v +
 
-#@gmic deconvolve_goldmeinel :  _nb_iter>=0, _acceleration>=0
+#@gmic deconvolve_goldmeinel : filter, _nb_iter>=0, _acceleration>=0
 #@gmic : Deblur and zoom selected images using Gold-Meinel algorithm
 #@gmic : Default values: 'nb_iter=8', 'acceleration=1' and 'kernel_type=1'.
 #@gmic : $ image.jpg 100%,100% -gaussian[-1] 5,1,45 -normalize_sum[-1] --convolve_fft --deconvolve_goldmeinel[1,2] 5 -print_psnr[0,2,3]
-deconvolve_goldmeinel : -check "${1=5}>=1&&${2=1}>=1"
-  -e[^-1] "Deblur image$? using Gold-Meinel algorithm, with $1 iterations, acceleration $2."
-  -v - -repeat {@#-1} -l[0,{$>+1}]
-    -r[0] @{1,w},@{1,h},@{1,d},100%,0,0,.5,.5,.5 -normalize_sum[0]
-    [1] -repeat $2
-     --convolve_fft[0,-1]  --/[1,-1] -rm[-2] -^[-1] $2 -*[-1,-2] # u *= (f / Hu)^$3
+deconvolve_goldmeinel : -check @{-is_image_arg\ $1}" && ${2=5}>=1 && ${3=1}>=1"
+ -e[^-1] "Deblur image using Gold-Meinel algorithm with filter $1, $2 iterationsand acceleration $3."
+ -v - -pass $1 0
+  -repeat {@#-1} -l[$>,-1]
+    -r[0] @{1,w},@{1,h},@{1,d},100%,0,0,.5,.5,.5 -normalize_sum[0] [0]
+    -repeat $2
+      --convolve_fft[-1] [1] -max[-1] 1e-6 --/[0,-1] -rm[-2]
+      -^[-1] $2 -*[-1,-2] # u *= (f / Hu)^$3
     -done -rm[0,1]
-  -endl -done -v +
+ -endl -done -v +
+
+#@gmic blend_sharpness
+#@gmic : Blend images in the list according to their sharpness
+blend_sharpness:
+-e[^-1] "Blend images according to their sharpness"
+-v -
+  N=@# --gradient_norm
+  --+[$N--1] -/[$N--2] [-1] -rm[-1]
+  -a[0-{$N-1}] x -a[1--1] x -* -s x,$N -+
+-v +
+
+#@gmic auto_deblur
+auto_deblur:
+-e[^-1] "Auto deblur"
+-v - -repeat @# -l[$>] -max 1e-6
+-repeat 5 --deblur_goldmeinel[0] $>,3 -done  -blend_sharpness
+-endl -done -v +
 
 #@gmic reconstruct_laplacian : param
 #@gmic : Reconstruct an image from its laplacian
