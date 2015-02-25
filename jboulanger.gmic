@@ -206,7 +206,7 @@ title:
 #@gmic : both being represented az a 3D stack
 quiver2d:
 -e[^-1] "Cumulative sum along z-axis"
--s z -repeat {@#/2} -l[$>,{$>+@#/2}] -quiver[0] [1] -endl -done -rm[{@#/2}--1] -a z
+-s z -repeat {@#/2} -l[$>,{$>+@#/2}] -quiver[0] [1],10,1,1,1,255 -endl -done -rm[{@#/2}--1] -a z
 
 #@gmic warp2d :
 #@gmic : Warp a 2D image stack using a vector field
@@ -214,7 +214,7 @@ quiver2d:
 warp2d:
 -s z -repeat {@#/2} -l[$>,{$>+@#/2}] -warp[0] [1],1,1,1 -endl -done -rm[{@#/2}--1] -a z
 
-#@gmic lucas_kanade: _scale
+#@gmic lucas_kanade: scale,smoothing
 #@gmic : Motion estimation using lucas and kanade approach
 #@gmic : Works on 2D+t image stacks/ has side effect
 #@gmic : [vx vy] = [Ixx Ixy; Ixy Iyy]^-1 [Ixt Iyt]
@@ -255,19 +255,21 @@ unwarp: -skip ${3=1}
 estimate_shift:
 -e[^-1] "Translation estimation with Lucas et Kanade algorithm"
 -v - -repeat {@#-1} -l[$>,{$>+1}]
--blur_xy 1 --gradient[0] xy,0 --[0,1] --sqr[1,2] --*[1,2] [0] -*[1,2] -rm[0]
-Ixy=@{0,ia} Ixx=@{1,ia} Iyy=@{2,ia} Ixt=@{3,ia} Iyt=@{4,ia}
-vx={($Iyy*$Ixt-$Ixy*$Iyt)/($Ixx*$Iyy-$Ixy*$Ixy)}
-vy={($Ixx*$Iyt-$Ixy*$Ixt)/($Ixx*$Iyy-$Ixy*$Ixy)}
-#-echo_stdout $vx,$vy
--rm 1,2 -f $vx,$vy
+  --min -norm[-1] -gt[-1] 1 -erode[-1] 5
+  -l[0,1]  -blur_xy 1 --gradient[0] xy,0 --[0,1] --sqr[1,2] --*[1,2] [0] -*[1,2] -rm[0] -endl
+  -*[0--2] [-1] -rm[-1]
+  Ixy=@{0,ia} Ixx=@{1,ia} Iyy=@{2,ia} Ixt=@{3,ia} Iyt=@{4,ia}
+  vx={($Iyy*$Ixt-$Ixy*$Iyt)/($Ixx*$Iyy-$Ixy*$Ixy)}
+  vy={($Ixx*$Iyt-$Ixy*$Ixt)/($Ixx*$Iyy-$Ixy*$Ixy)}
+  #-echo_stdout $vx,$vy
+  -rm 1,2 -f $vx,$vy
 -endl -done -v +
 
 #@gmic multi_resolution_pyramide : _number_of_scales
 #@gmic : Build a multi-resolution pyramid
 multi_resolution_pyramide:
 -v - -repeat @# -l[$<]
--repeat {$1-1} --resize[-1] 50%,50% -done -reverse
+  -repeat {$1-1} --resize[-1] 50%,50%,50%,100%,5 -done -reverse
 -endl -done -v +
 
 #@gmic estimate_shift_mr
@@ -280,25 +282,24 @@ estimate_shift_mr: -skip ${1=2}
 -repeat {$1-1}
   --estimate_shift[$>,{$1+$>}] -*[-1,-2] -2 -+[-1,-2]
   @{{$>+1},w},@{{$>+1},h},1,2 -f[-1] 'if(c==0,@{-2,i(0)},@{-2,i(0,1)})'
-  -warp[{$1+$>+1}] [-1],1,1,1 -rm[-1] -*[-1] -1
+  -warp[{$1+$>+1}] [-1],1,2,1 -rm[-1] -*[-1] -1
 -done
 -k[-1]
 
-#@gmic unshift : _iterations
+#@gmic unshift : iterations,number_of_scales
 #@gmic : Correct drift along Z in a 3D volume (video stabilization)
 #@gmic : Use the linearized optical flow constraint iteratively
 #@gmic : $ image.jpg  -luminance -repeat  10 --shift[-1] {2*?},{2*?},0,0,2 -done -a z --unshift 20 -a x
-unshift: -skip ${1=10}
+unshift: -skip ${1=10},${2=5}
 -e[^-1] "unshift image stack"
 -v - -repeat @# -l[$>]
--repeat $1
--s z -repeat {@#-1} -l[$>,{$>+1}]
---estimate_shift_mr 5 -*[-1] -1 vx=@{2,i(0)} vy=@{2,i(0,1)}
-#-echo_stdout $vx,$vy
-@{0,w},@{0,h} -f[-1] $vx --f[-1] $vy -a[-1,-2] c
--warp[1] [-1],1,2,1 -rm[-1,-2]
--endl -done -a z
--done
+  -repeat $1
+    -s z -repeat {@#-1} -l[$>,{$>+1}]
+    --estimate_shift_mr $2 -*[-1] -1 vx=@{2,i(0)} vy=@{2,i(0,1)}
+    @{0,w},@{0,h} -f[-1] $vx --f[-1] $vy -a[-1,-2] c
+    -warp[1] [-1],1,2,1 -rm[-1,-2]
+    -endl -done -a z
+  -done
 -endl -done -v +
 
 #@gmic register_lucas_kanade : _iterations, _scale
@@ -648,6 +649,20 @@ deconvolve_goldmeinel : -check "${1=5}>=1&&${2=1}>=1"
     -done -rm[0,1]
   -endl -done -v +
 
+#@gmic reconstruct_laplacian : param
+#@gmic : Reconstruct an image from its laplacian
+#@gmic :
+reconstruct_laplacian:
+-e[^-1] "Reconstruct an image from its laplacian"
+-v - -repeat @# -l[$>]
+-s c -repeat @# -l[$>]
+-fft a=@{0,i(0,0)} b=@{1,i(0,0)}
+100%,100%,1,1,'-(4-2*cos(2*x*pi/w)-2*cos(2*y*pi/h))'
+-=[-1] 1 -+[-1] $1
+-/[0,1] [-1] -k[0,1] -=[0] $a -=[1] $b -ifft -k[0]
+-endl -done -a c
+-endl -done -v -
+
 #@gmic local_variance : _radius,_robust
 #@gmic : Local variance filter
 #@gmic : $ image.jpg  --local_variance
@@ -975,10 +990,17 @@ display_vobs :
 -text "Vobs ["$A":"$B"]",5,0,13,1,255 -endl -done -a z -endl
 -a x
 
-display_pseudocolor :
- A={round(@{-1,im},0.0001)} B={round(@{-1,iM},0.0001)} -n[-1] 0,255 -map[-1] 5
+#@gmic display_pseudocolor : predefined_palette
+#@gmic : Display an indexed image in pseudocolors using a palette
+#@gmic : $ image.jpg -luminance -display_pseudocolor
+display_pseudocolor : -skip ${1=5}
+-e[^-1] "Display an indexed image in pseudocolors using map "$1
+-v - -repeat @# -l[$>]
+ A={round(@{-1,im},0.0001)} B={round(@{-1,iM},0.0001)}
+ -n[-1] 0,255 -map[-1] $1
  -rectangle {w-50-5},{h/4-5},{w-5},{h-h/4+5},.5,0,0,0
  -add_colorbar[-1] {w-50},{h/4},{w-40},{h-h/4},$A,$B,6,255
+-endl -done -v +
 
 #@gmic display_colordepth : _dz
 display_colordepth :
@@ -987,6 +1009,17 @@ display_colordepth :
  H={d*$1} -colordepth , -a z -min {ia+10*sqrt(iv)} -n 0,255 -s z
  -rectangle {w-50-5},{h/4-5},{w-5},{h-h/4+5},.5,0,0,0
  -add_colorbar[-1] {w-50},{h/4},{w-40},{h-h/4},0,$H,6,255
+-endl -done -v +
+
+#@gmic map_hilo
+#@gmic : Map a grascale image to a RGB with maw in red and min in blue
+#@gmic : This help to check if images are saturated
+map_hilo:
+-v - -repeat @# -l[$>]
+  -round m=@{0,im} -- $m
+  1,1,1,3,0,0,@{0,iM} {@{0,iM}-1},1,1,3,'x+1' 1,1,1,3,@{0,iM},0,0 -a[1,2,3] x
+  -map[0] [1]
+  -+ $m -rm[1]
 -endl -done -v +
 
 #@gmic add_colorbar : x0,y0,x1,y1,_min,_max,_ntics,color,colormap
@@ -1340,17 +1373,14 @@ segment_snake: -skip ${1=100},${2=1},${3=.1},${4=.1},${5=10},${6=0}
   -blur[-1] 1 -gt[-1] 0 -rm[0]
 -endl -done -v +
 
-#@gmic segment_cells:
+#@gmic segment_cells: scale1,scale2,threshold
 #@gmic : Cell segmentation using watershed
 #@gmic : $ 256,256 -noise .05,2 -blur 10,1,1 -min 80% -noise 5% --segment_cells 2,10% -contour2d[-1] , -resize[-1] 100%,100%,1,3,0 -n 0,255 -blend add
-segment_cells: -skip ${1=5},${2=10%}
--blur $1
---l[0]
- --max_patch , -gt[0] $2 -* --distance 1 -mul[-1] -1 -label[-2] 0
- -watershed[-2] [-1] -rm[1]
--endl
--gt[0] $2
--*
+segment_cells: -skip ${1=3},${2=10},${3=1}
+-v - -repeat @# -l[$>]
+-blur $1 --blur $2 -- --gt  {ia+$3*@{-mad}} --distance[1] 0 -blur[-1] 1
+-max_patch[0] , -*[0] [1] -label[0] 0 -watershed[0] [2] -rm[-1] -*
+-endl -done -v +
 
 #---------------------------------
 #
