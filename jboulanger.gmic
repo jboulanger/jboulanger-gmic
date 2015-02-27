@@ -1783,7 +1783,7 @@ jeje_rays :
 jeje_rays_preview:
 -gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11",$-1
 
-#@gimp _<b>Dtails</b>
+#@gimp _<b>Details</b>
 #@gimp Local variance normalization : jeje_normalize_local_variance, jeje_normalize_local_variance_preview
 #@gimp : Amplitude = float(50,0,100)
 #@gimp : Smoothness = float(5,0,20)
