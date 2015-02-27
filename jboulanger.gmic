@@ -879,7 +879,26 @@ simmod :
 spotify : -check "${1=1}>0 && ${2=1}>0"
 -e[^-1] "Spotify with scale $1 with $2 iterations"
 -v - -repeat @# -l[$>]
-  s=@{0,a} -repeat $2 -blur $1 --blur {2*$1} -- -max 0 -* '{$s/@{0,a}}' -done
+  -if {@{0,m}!=@{0,M}}
+    s=@{0,a}
+    -repeat $2
+      -b $1 --b {2*$1} -- -max 0 -* '{$s/@{0,a}}'
+    -done
+  -endif
+-endl -done -v +
+
+#@gmic deblur_sparse : scale,threshold,iterations
+#@gmic : Deblur an image with a sparsity constraint and positivity
+#@gmic : $ image.jpg -deblur_sparse 1,10,10
+deblur_sparse : -check "${1=1}>0 && ${2=10}>0 && ${3=10}>1 && ${4=.001}>=0"
+-e[^-1] "Deblur with sparsity constraint with scale $1 with $2 iterations"
+-v - -repeat @# -l[$>]
+  s=@{0,a} [0]
+  -repeat $3
+    --blur[1] $1 --[2] [0] -blur[2] $1 -*[2] -.25 -+[-1,-2]
+    -if {$4>0} --laplacian[-1] -*[-1] $4 -+[-1,-2] -endif
+    -- $2 -max 0 -* '@{0,$s/ia}'
+  -done -k[1]
 -endl -done -v +
 
 #@gmic depthmap
@@ -1764,7 +1783,7 @@ jeje_rays :
 jeje_rays_preview:
 -gimp_split_preview "-jeje_rays $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11",$-1
 
-#@gimp _<b>Details</b>
+#@gimp _<b>Dtails</b>
 #@gimp Local variance normalization : jeje_normalize_local_variance, jeje_normalize_local_variance_preview
 #@gimp : Amplitude = float(50,0,100)
 #@gimp : Smoothness = float(5,0,20)
@@ -1782,16 +1801,17 @@ jeje_normalize_local_variance_preview:
 
 #@gimp Spotify : jeje_spotify,jeje_spotify_preview
 #@gimp : Scale = float(1,0.75,10)
-#@gimp : Iteration = int(1,1,10)
+#@gimp : Iteration = int(1,1,50)
+#@gimp : Gamma = float(1,0,10)
 #@gimp : Cut = bool(1)
 #@gimp : Channel(s) = choice(3,"All","RGBA","RGB","Luminance","Blue/red chrominances","Blue chrominance","Red chrominance","Lightness","ab-components","a-component","b-component","Hue","Saturation","Value","Key","Alpha","ch-components","c-component","h-component","Red","Green","Blue","Alpha")
 #@gimp : sep = separator(), Preview type = choice("Full","Forward horizontal","Forward vertical","Backward horizontal","Backward vertical")
 #@gimp : sep = separator(), note = note("<small>Author : <i>J&#233;r&#244;me Boulanger</i>. Latest update: <i>2013/12/16</i>.</small>")
 jeje_spotify:
- -apply_channels "-spotify $1,$2 -if $3 -c 0,255 -else -n 0,255 -endif",$4,0
+ -apply_channels_old "-spotify $1,$2  -apply_gamma $3 -if $4 -c 0,255 -else -n 0,255 -endif",$5,0
 
 jeje_spotify_preview:
-  -gimp_split_preview "-jeje_spotify $1,$2,$3,$4",$5
+  -gimp_split_preview "-jeje_spotify $1,$2,$3,$4,$5",$6
 
 #@gimp _<b>Testing</b>
 #@gimp <i>J&#233;J&#233;</i>
