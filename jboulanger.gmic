@@ -964,7 +964,8 @@ calibrate_affine_transform :
     x2=@{!2,x} y2=@{!2,y}
     -if {$x1>=0}
       -if {@{!1,b}&1} # if button 1 on window 1: add pts
-        (1;{$x1/@{!1,w}*@{0,w}};{$y1/@{!1,h}*@{0,h}}) -if {@{2,h}>1} -a[2,-1] x -else -rm[2] -mv[-1] 2 -endif
+        (1;{$x1/@{!1,w}*@{0,w}};{$y1/@{!1,h}*@{0,h}})
+	-if {@{2,h}>1} -a[2,-1] x -else -rm[2] -mv[-1] 2 -endif
       -else
         -if {@{!1,b}&2} # if button 2 on window 1: rm pts
 	  -if {@{2,w}>1} -columns[2] 0,@{2,w-2} -else -rm[2] 0 -mv[-1] 2 -endif
@@ -973,7 +974,8 @@ calibrate_affine_transform :
     -endif
     -if {$x2>=0}
       -if {@{!2,b}&1}  # if button 1 on window 2: add pts
-        (1;{$x2/@{!2,w}*@{1,w}};{$y2/@{!2,h}*@{1,h}}) -if {@{3,h}>1} -a[3,-1] x -else -rm[3] -mv[-1] 3 -endif
+        (1;{$x2/@{!2,w}*@{1,w}};{$y2/@{!2,h}*@{1,h}})
+	-if {@{3,h}>1} -a[3,-1] x -else -rm[3] -mv[-1] 3 -endif
       -else
         -if {@{!2,b}&2} # if button 2 on window 2: rm pts
           -if {@{3,w}>1} -columns[3] 0,@{3,w-2} -else -rm[3] 0 -mv[-1] 3 -endif
@@ -997,16 +999,27 @@ calibrate_affine_transform :
     -endif
     # Display first image
     --l[0,2]
-      -r[0] 100%,100%,1,3,1 -if {@{1,h}>1} -rows[1] 1,2 -circles[0] [1]
+      -r[0] 200%,200%,1,1,5
+      -r[0] 100%,100%,1,3,0 -grid[0] 10%,10%,0,0,.3,0xCCCCCCCC,255,128,32
+      -if {@{1,h}>1} -rows[1] 1,2  -*[1] 2
+      1,5,1,1,2,1,255,0,0 -r[-1] @{0,w},100%,1,1,1  -circles[0] [1]
       -labels[0] [1] -endif -w1[0] -1,-1,-1,-1,"First image (n="@{1,w}")" -rm
     -endl
     # Display second image
     --l[1,3]
-      -r[0] 100%,100%,1,3,1 -if {@{1,h}>1} -rows[1] 1,2 -circles[0] [1]
+      -r[0] 200%,200%,1,1,5
+      -r[0] 100%,100%,1,3,0  -shift[0] 0,0,0,1 -grid[0] 10%,10%,0,0,.3,0xCCCCCCCC,255,128,32
+      -if {@{1,h}>1} -rows[1] 1,2 -*[1] 2
+      1,5,1,1,2,1,255,0,0 -r[-1] @{0,w},100%,1,1,1  -circles[0] [1]
       -labels[0] [1] -endif -w2[0] -1,-1,-1,-1,"Second image (n="@{1,w}")" -rm
     -endl
     # warp image 1 and display merge
-    --l[0,1,4] -warp_affine[1] [2] -rm[2] -a c -w3 -1,-1,-1,-1,"merge "$N -rm -endl
+    --l[0,1,4]
+      -warp_affine[1] [2] -rm[2] -a c
+      -r[0] 200%,200%,1,100%,5
+      -grid[0] 10%,10%,0,0,.3,0xCCCCCCCC,255,128,32
+      -w3 -1,-1,-1,-1,"merge "$N -rm
+    -endl
   -wait
   -while {@{!1}" && "!@{!1,Q}" && "!@{!1,ESC}" && "@{!2}}
   -w1[] 0 -w2[] 0 -w3[] 0
