@@ -958,7 +958,7 @@ calibrate_affine_transform :
 -e[] "- Press Space to re-init the list of points"
 -e[] "- Close the window to finish\n"
 -v - -pass$1 0 -repeat {@#-1} -l[$>,-1] -reverse
- 0 0 (1,0,0;0,1,0;0,0,1)
+ 0 0 (1,0,0;0,1,0;0,0,1) Z=0
   -do
     x1=@{!1,x} y1=@{!1,y}
     x2=@{!2,x} y2=@{!2,y}
@@ -984,6 +984,9 @@ calibrate_affine_transform :
     -endif
     # if space bar is pressed : reinitialize
     -if {@{!0,SPACE}" || "@{!1,SPACE}" || "@{!2,SPACE}} -rm[2,3,4] 0 0 (1,0,0;0,1,0;0,0,1) -endif
+    -if @{!1,o} Z={max(0,min(@{0,d}-1,$Z+@{!1,o}))} -wait -1 -endif
+    -if @{!2,o} Z={max(0,min(@{0,d}-1,$Z+@{!2,o}))} -wait -1 -endif
+    -if @{!3,o} Z={max(0,min(@{0,d}-1,$Z+@{!3,o}))} -wait -1 -endif
     # number of paired points
     N={min(@{2,w},@{3,w})}
     # if each list has at least one pts
@@ -999,6 +1002,7 @@ calibrate_affine_transform :
     -endif
     # Display first image
     --l[0,2]
+      -if {@{0,d}>1} -slices[0] $Z -endif
       -r[0] 200%,200%,1,1,5
       -r[0] 100%,100%,1,3,0 -grid[0] 10%,10%,0,0,.3,0xCCCCCCCC,255,128,32
       -if {@{1,h}>1} -rows[1] 1,2  -*[1] 2
@@ -1007,6 +1011,7 @@ calibrate_affine_transform :
     -endl
     # Display second image
     --l[1,3]
+      -if {@{0,d}>1} -slices[0] $Z -endif
       -r[0] 200%,200%,1,1,5
       -r[0] 100%,100%,1,3,0  -shift[0] 0,0,0,1 -grid[0] 10%,10%,0,0,.3,0xCCCCCCCC,255,128,32
       -if {@{1,h}>1} -rows[1] 1,2 -*[1] 2
@@ -1015,10 +1020,11 @@ calibrate_affine_transform :
     -endl
     # warp image 1 and display merge
     --l[0,1,4]
+      -if {@{0,d}>1} -slices[0,1] $Z -endif
       -warp_affine[1] [2] -rm[2] -a c
       -r[0] 200%,200%,1,100%,5
       -grid[0] 10%,10%,0,0,.3,0xCCCCCCCC,255,128,32
-      -w3 -1,-1,-1,-1,"merge "$N -rm
+      -w3 -1,-1,-1,-1,"merge "$N" Z="$Z -rm
     -endl
   -wait
   -while {@{!1}" && "!@{!1,Q}" && "!@{!1,ESC}" && "@{!2}}
